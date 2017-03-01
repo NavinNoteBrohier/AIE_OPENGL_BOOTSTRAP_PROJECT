@@ -1,8 +1,5 @@
 #include "PROJECTApp.h"
-#include "Gizmos.h"
-#include "Input.h"
-#include <glm/glm.hpp>
-#include <glm/ext.hpp>
+
 
 using glm::vec3;
 using glm::vec4;
