@@ -1,23 +1,31 @@
 #pragma once
-
-#include "Application.h"
 #include <glm/mat4x4.hpp>
-#include "Gizmos.h"
-#include "Input.h"
 #include <iostream>
 #include <Texture.h>
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
+#include <vector>
+#include "Application.h"
+#include "Gizmos.h"
+#include "Input.h"
 #include "gl_core_4_4.h"
 #include "CameraProjection.h"
 #include "FBXFile.h"
-#include <vector>
+
+
+// Now is not the time to run from the accusations that I am irredeemably broken.Resistance is saying that, not me.I am not broken.My code is broken.I am whole and I am doing the right thing.This is all part of the process.I have wrestled these demons before and I have won.I have looked defeat in the face and it is not a mirror, it is a mirage.I am going to make a game that some people will like to play.
+// Attributed to Shaid Kamal Ahmad: https://medium.com/@shahidkamal/my-code-is-broken-and-so-am-i-923b0b1abf1b#.opajp7qro
+// My code is broken. And I am going to fix it.
 
 class Camera;
+class ParticleEmitter;
+
 namespace aie
 {
 	class Texture;
 }
+
+
 
 class GLMesh
 {
@@ -62,7 +70,8 @@ public:
 	void UnloadMap();
 
 	//Load Models
-
+	void LoadFBX(char* Location);
+	void UnloadFBX();
 
 protected:
 	// camera transforms
@@ -70,6 +79,7 @@ protected:
 	glm::mat4	m_viewMatrix;
 	glm::mat4	m_projectionMatrix;
 
+	//Textures
 	std::vector<aie::Texture*> m_TexList;
 	std::vector<aie::Texture*> m_MapList;
 
@@ -88,6 +98,7 @@ protected:
 	//Shaders
 	unsigned int m_shader;
 	unsigned int m_ModelShader;
+	unsigned int m_ParticleShader;
 
 	unsigned int m_IndicesCount;
 	unsigned int m_VertCount;
@@ -99,7 +110,10 @@ protected:
 	//FBX models
 	//unsigned int m_shader;
 	FBXFile *m_myFbxModel;
+	std::vector<FBXFile*> m_FBXList;
 
+	//Emitters;
+	ParticleEmitter *m_Emitter;
 	//vertex
 	struct Vertex
 	{
@@ -109,4 +123,5 @@ protected:
 		glm::vec4 color;
 		static void SetupVertexAttribPointers();
 	};
+
 };

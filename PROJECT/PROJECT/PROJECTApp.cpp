@@ -1,5 +1,5 @@
 #include "PROJECTApp.h"
-
+#include "Particle.h"
 
 using glm::vec3;
 using glm::vec4;
@@ -48,9 +48,25 @@ bool PROJECTApp::startup() {
 	LoadMap("textures/HM.bmp");
 
 	//Load models
+
+
+
 	m_myFbxModel = new FBXFile();
 	m_myFbxModel->load("./models/Golden Oaks Library/Golden Oaks Library.Fbx", FBXFile::UNITS_CENTIMETER);
 	CreateFBXOpenGLBuffers(m_myFbxModel);
+
+	//Load emitters 
+
+	m_Emitter = new ParticleEmitter();
+	m_Emitter->Initialise
+	(
+		1000, 500,
+		0.1f, 5.0f,
+		1, 5,
+		1, 0.1f,
+		glm::vec4(1, 0, 0, 1), glm::vec4(1, 1, 0, 1)
+	);
+	 //
 
 	LoadShader();
 	CreateLandScape();
@@ -81,6 +97,8 @@ void PROJECTApp::update(float deltaTime)
 	// rotate camera
 	m_Camera->Update(deltaTime);
 
+	m_Emitter->Update(deltaTime,*m_Camera);
+	
 	// wipe the gizmos clean for this frame
 	Gizmos::clear();
 
@@ -101,9 +119,7 @@ void PROJECTApp::draw()
 		getWindowWidth() / (float)getWindowHeight(),
 		0.1f, 1000.f);
 
-
-
-
+#pragma region //Shader
 	// STEP 1: enable the shader program for rendering
 	glUseProgram(m_shader);
 
@@ -162,7 +178,7 @@ void PROJECTApp::draw()
 	glUseProgram(0);
 
 	Gizmos::draw(m_projectionMatrix * m_Camera->GetView());
-
+#pragma endregion
 
 #pragma region //FBX LOADING
 	// FBX loading
@@ -204,7 +220,19 @@ void PROJECTApp::draw()
 	}
 	glUseProgram(0);
 #pragma endregion
-	//DrawGrid();
+
+#pragma region //Emitters
+
+	glUseProgram(m_ParticleShader);
+	int loc = glGetUniformLocation(m_ParticleShader, "ProjectionView");
+	glUniformMatrix4fv(loc, 1, GL_FALSE,
+		glm::value_ptr(projectionView));
+	m_Emitter->Draw();
+	glUseProgram(0);
+
+
+#pragma endregion
+
 }
 
 void PROJECTApp::CreateFBXOpenGLBuffers(FBXFile * file)
@@ -409,7 +437,6 @@ void PROJECTApp::LoadShader()
 	std::cout << "Finished Step 6" << std::endl;
 #pragma endregion
 
-
 #pragma region //Model Shader
 	// Model Shader
 	const char* vsSource =
@@ -443,11 +470,12 @@ void PROJECTApp::LoadShader()
 		";
 
 	GLuint VertexShader = glCreateShader(GL_VERTEX_SHADER);
-	glShaderSource(VertexShader, 1, (const char**)&vsSource, 0);
+	glShaderSource(VertexShader, 1, &vsSource, 0);
 	glCompileShader(VertexShader);
 
 	GLuint FragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-	glShaderSource(FragmentShader, 1, (const char**)&fsSource, 0);
+	glShaderSource(FragmentShader, 1, &fsSource, 0);
+	glCompileShader(FragmentShader);
 
 	m_ModelShader = glCreateProgram();
 
@@ -463,12 +491,70 @@ void PROJECTApp::LoadShader()
 	glDeleteShader(VertexShader);
 	glDeleteShader(FragmentShader);
 #pragma endregion
+
+#pragma region //Particle Shader
+
+	const char* ParticleVertexShader =
+		"#version 410\n								\
+		in vec4 Position;\n								\
+		in vec4 inColor;\n								\
+														\
+		out vec4 Color;\n								\
+														\
+		uniform mat4 ProjectionView;\n					\
+														\
+		void main()\n										\
+		{\n												\
+			Color = inColor;\n							\
+			gl_Position = ProjectionView * Position;\n		\
+														\
+		};\n											";
+
+	const char* ParticleFragmentShader =
+		"#version 410\n									\
+														\
+		in vec4 Color;\n								\
+		out	vec4 FragColor;\n							\
+														\
+		void main()\n									\
+		{\n												\
+														\
+														\
+														\
+														\
+														\
+			FragColor = Color;\n						\
+		};\n											";
+
+	GLuint PaVertexShader = glCreateShader(GL_VERTEX_SHADER);
+	glShaderSource(PaVertexShader, 1, &ParticleVertexShader, 0);
+	glCompileShader(PaVertexShader);
+
+	GLuint PaFragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+	glShaderSource(PaFragmentShader, 1, &ParticleFragmentShader, 0);
+
+	m_ParticleShader = glCreateProgram();
+
+	glAttachShader(m_ParticleShader, PaVertexShader);
+	glAttachShader(m_ParticleShader, PaFragmentShader);
+
+	glBindAttribLocation(m_ParticleShader, 0, "Position");
+	glBindAttribLocation(m_ParticleShader, 1, "inColor");
+
+	glLinkProgram(m_ParticleShader);
+
+	glDeleteShader(PaVertexShader);
+	glDeleteShader(PaFragmentShader);
+
+#pragma endregion
+
 }
 
 void PROJECTApp::UnloadShader()
 {
 	glDeleteProgram(m_shader);
 	glDeleteProgram(m_ModelShader);
+	glDeleteProgram(m_ParticleShader);
 }
 
 void PROJECTApp::CreateLandScape()
@@ -675,6 +761,15 @@ void PROJECTApp::SetupTex(GLchar* a_handle, int a_index, unsigned int a_shader)
 	glUniform1i(glGetUniformLocation(a_shader, a_handle), a_index);
 }
 
+void PROJECTApp::LoadFBX(char* Location)
+{
+	FBXFile* TempFBX;
+	TempFBX = new FBXFile();
+	TempFBX->load(Location, FBXFile::UNITS_CENTIMETER);
+	m_FBXList.push_back(TempFBX);
+	CreateFBXOpenGLBuffers(m_FBXList.at(m_FBXList.size()));
+}
+
 void PROJECTApp::UnloadTex()
 {
 	m_TexList.clear();
@@ -685,4 +780,9 @@ void PROJECTApp::UnloadMap()
 {
 	m_MapList.clear();
 	// DEStRoyED
+}
+
+void PROJECTApp::UnloadFBX()
+{
+	m_FBXList.clear();
 }
