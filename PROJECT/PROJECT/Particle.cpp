@@ -266,6 +266,13 @@ void ParticleEmitter::SetVariables(int EmitRate, int MaxParticles,
 	m_MaxParticles = MaxParticles;
 }
 
+void ParticleEmitter::setImage(char* a_tex)
+{
+	m_texture = new aie::Texture();
+	m_texture->load(a_tex);
+	m_TexActive = true;
+}
+
 void ParticleEmitter::Draw()
 {
 	// Sync the particle vertex buffer

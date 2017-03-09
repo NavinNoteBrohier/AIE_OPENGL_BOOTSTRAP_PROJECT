@@ -56,6 +56,10 @@ public:
 	virtual void update(float deltaTime);
 	virtual void draw();
 
+	//Post processing
+
+	void SetupFrameBuffer();
+
 	//FBX render
 	void CreateFBXOpenGLBuffers(FBXFile *file);
 	void CreateFBXOpenGLBuffers(FBXFile *file, bool additionalAtribs);
@@ -112,11 +116,7 @@ protected:
 
 	// Stats for lights
 	glm::vec3 m_LightPosition;
-
-
 	glm::vec3 m_LightColor;
-
-
 	glm::vec3 m_LightSpecColor;
 
 	float LightSphereSize = 0.5;
@@ -129,6 +129,7 @@ protected:
 	unsigned int m_ModelShader;
 	unsigned int m_AnimationShader;
 	unsigned int m_ParticleShader;
+	unsigned int m_ParticleShaderImage;
 
 	unsigned int m_IndicesCount;
 	unsigned int m_VertCount;
@@ -136,6 +137,10 @@ protected:
 	unsigned int m_Vao;
 	unsigned int m_Vbo;
 	unsigned int m_Ibo;
+
+	//Post processing
+	GLuint m_fbo;
+	GLuint m_fboTexture;
 
 	// FBX models
 	// Unsigned int m_shader;

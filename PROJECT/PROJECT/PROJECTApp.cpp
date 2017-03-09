@@ -1,6 +1,5 @@
 #include "PROJECTApp.h"
 #include "Particle.h"
-#include "FBXAnimation.h"
 
 using glm::vec3;
 using glm::vec4;
@@ -300,6 +299,7 @@ void PROJECTApp::draw()
 #pragma region //Emitters
 
 	glUseProgram(m_ParticleShader);
+	SetupTex("PTex",0,m_ParticleShaderImage);
 	int loc = glGetUniformLocation(m_ParticleShader, "ProjectionView");
 	glUniformMatrix4fv(loc, 1, GL_FALSE,
 		glm::value_ptr(projectionView));
@@ -322,6 +322,18 @@ void PROJECTApp::draw()
 	Gizmos::addSphere(vec3(m_LightPosition.x, m_LightPosition.y, m_LightPosition.z),
 		LightSphereSize, 10, 10, glm::vec4(1, 1, 1, 0.5));
 	Gizmos::draw(m_projectionMatrix * m_Camera->GetView());
+}
+
+void PROJECTApp::SetupFrameBuffer()
+{
+	glGenFramebuffers(1, &m_fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
+
+	glGenTextures(1, &m_fboTexture);
+	glBindTexture(GL_TEXTURE_2D, m_fboTexture);
+	glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, this->getWindowWidth, this->getWindowHeight);
+	//glTexParameteri()
+
 }
 
 void PROJECTApp::CreateFBXOpenGLBuffers(FBXFile * file)
@@ -808,6 +820,89 @@ void PROJECTApp::LoadShader()
 
 #pragma endregion
 
+#pragma region //Particles with image.
+
+	const char* ParticleVertexShaderImage =
+		"#version 410\n									\
+		in vec4 Position;\n								\
+		in vec4 inColor;\n								\
+														\
+		in vec2 TvUv;\n									\
+		in vec4 TvNormal;\n								\
+														\
+		out vec4 Color;\n		 						\
+		out vec4 TfNormal;\n							\
+		out vec2 TfUv;\n								\
+														\
+		uniform mat4 ProjectionView;\n					\
+														\
+		void main()\n									\
+		{\n												\
+			TfUv = TvUv;\n								\
+			TfNormal = TvNormal;\n						\
+														\
+														\
+			Color = inColor;\n							\
+			gl_Position = ProjectionView * Position;\n	\
+														\
+		};\n											";
+
+	const char* ParticleFragmentShaderImage =
+		"#version 410\n									\
+														\
+		in vec4 Color;\n								\
+		out	vec4 FragColor;\n							\
+		out vec4 TfNormal;\n							\
+		out vec2 TfUv;\n								\
+														\
+														\
+														\
+														\
+		uniform sampler2D PTex;\n						\
+														\
+		void main()\n									\
+		{\n												\
+			FragColor = Color * TfUv;\n					\
+		};\n											";
+
+	GLuint TPaVertexShader = glCreateShader(GL_VERTEX_SHADER);
+	glShaderSource(TPaVertexShader, 1, &ParticleVertexShaderImage, 0);
+	glCompileShader(TPaVertexShader);
+
+	GLuint TPaFragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+	glShaderSource(TPaFragmentShader, 1, &ParticleFragmentShaderImage, 0);
+	glCompileShader(TPaFragmentShader);
+
+	m_ParticleShader = glCreateProgram();
+
+	glAttachShader(m_ParticleShaderImage, TPaVertexShader);
+	glAttachShader(m_ParticleShaderImage, TPaFragmentShader);
+
+	glBindAttribLocation(m_ParticleShader, 0, "Position");
+	glBindAttribLocation(m_ParticleShader, 1, "inColor");
+	glBindAttribLocation(m_ParticleShader, 3, "TvUv");
+	glBindAttribLocation(m_ParticleShader, 4, "TvNormal");
+
+	glLinkProgram(m_ParticleShader);
+
+	int successs = GL_TRUE;
+	glGetProgramiv(m_ParticleShader, GL_LINK_STATUS, &successs);
+	if (successs == GL_FALSE)
+	{
+		int infoLogLength = 0;
+		glGetProgramiv(m_ParticleShader, GL_INFO_LOG_LENGTH, &infoLogLength);
+
+		char* error = new char[infoLogLength + 1];
+		glGetProgramInfoLog(m_ParticleShader, infoLogLength, 0, error);
+		printf("Shader error: \n%s\n", error);
+		delete[] error;
+	}
+
+	glDeleteShader(TPaVertexShader);
+	glDeleteShader(TPaFragmentShader);
+
+#pragma endregion
+
 }
 
 void PROJECTApp::UnloadShader()
@@ -815,6 +910,7 @@ void PROJECTApp::UnloadShader()
 	glDeleteProgram(m_shader);
 	glDeleteProgram(m_ModelShader);
 	glDeleteProgram(m_ParticleShader);
+	glDeleteProgram(m_ParticleShaderImage);
 	glDeleteProgram(m_AnimationShader);
 }
 
