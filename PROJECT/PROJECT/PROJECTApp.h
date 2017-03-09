@@ -5,17 +5,26 @@
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
 #include <vector>
+#include <imgui.h>
+#include <glm/gtx/matrix_decompose.hpp>
 #include "Application.h"
 #include "Gizmos.h"
 #include "Input.h"
 #include "gl_core_4_4.h"
 #include "CameraProjection.h"
 #include "FBXFile.h"
+///////////////////////////////////////////////////////////////////////////////
+//																			 //
+///																			///
+//// Navin Brohier - navinnotebrohier.github.io - navin.brohier@gmail.com  ////
+///																			///
+//																			 //
+///////////////////////////////////////////////////////////////////////////////
 
 
 // Now is not the time to run from the accusations that I am irredeemably broken.Resistance is saying that, not me.I am not broken.My code is broken.I am whole and I am doing the right thing.This is all part of the process.I have wrestled these demons before and I have won.I have looked defeat in the face and it is not a mirror, it is a mirage.I am going to make a game that some people will like to play.
-// Attributed to Shaid Kamal Ahmad: https://medium.com/@shahidkamal/my-code-is-broken-and-so-am-i-923b0b1abf1b#.opajp7qro
 // My code is broken. And I am going to fix it.
+// Attributed to Shaid Kamal Ahmad: https://medium.com/@shahidkamal/my-code-is-broken-and-so-am-i-923b0b1abf1b#.opajp7qro
 
 class Camera;
 class ParticleEmitter;
@@ -24,8 +33,6 @@ namespace aie
 {
 	class Texture;
 }
-
-
 
 class GLMesh
 {
@@ -51,6 +58,7 @@ public:
 
 	//FBX render
 	void CreateFBXOpenGLBuffers(FBXFile *file);
+	void CreateFBXOpenGLBuffers(FBXFile *file, bool additionalAtribs);
 	void CleanupFBXOpenGLBuffers(FBXFile *file);
 
 	//shader
@@ -60,7 +68,7 @@ public:
 	void CreateLandScape();
 	void DestroyLandScape();
 
-	// Load Textures
+	// Load/Unload/Setup Textures
 	void LoadTex(char* Location);
 	void LoadMap(char* Location);
 
@@ -69,35 +77,57 @@ public:
 	void UnloadTex();
 	void UnloadMap();
 
-	//Load Models
+	//Load/Unload/Setup Models
 	void LoadFBX(char* Location);
+	void LoadFBX(char* Location, bool anim);
 	void UnloadFBX();
+	void FBXLoop(unsigned int a_Shader, FBXFile& a_Model, float a_scale);
+	void FBXLoop(unsigned int a_Shader, FBXFile& a_Model, float a_scale, bool a_Skeleton);
+
+	// Animations
+	void LoadFBXAnimations(static std::string a_String[]);
+	void UpdateFBXAnimation(FBXFile* a_model, FBXFile* a_anims);
+
+	//Particles
+	void LoadEmitter(int EmitRate, int MaxParticles, float LifeTimeMin,
+		float LifetimeMax, float VelocityMin, float VelocityMax, float StartSize,
+		float EndSize, glm::vec4 StartColor, glm::vec4 EndColor);
+	void UnloadEmitter();
 
 protected:
-	// camera transforms
+	// Camera transforms
 	Camera *m_Camera;
 	glm::mat4	m_viewMatrix;
 	glm::mat4	m_projectionMatrix;
 
-	//Textures
+	// Textures
 	std::vector<aie::Texture*> m_TexList;
 	std::vector<aie::Texture*> m_MapList;
 
-	//stats for landscape
+	// Stats for landscape
 	const int m_LandWidth = 255;
 	const int m_LandLength = 255;
 	const float m_vertSeperation = 0.1f;
 	const float m_maxHeight = 3.0f;
 
-	//stats for light
+	// Stats for lights
 	glm::vec3 m_LightPosition;
+
+
 	glm::vec3 m_LightColor;
+
+
 	glm::vec3 m_LightSpecColor;
+
+	float LightSphereSize = 0.5;
+
 	float m_LightAmbientStrength;
 	float m_SpecStrength;
-	//Shaders
+
+	// Shaders
 	unsigned int m_shader;
 	unsigned int m_ModelShader;
+	unsigned int m_AnimationShader;
 	unsigned int m_ParticleShader;
 
 	unsigned int m_IndicesCount;
@@ -107,14 +137,35 @@ protected:
 	unsigned int m_Vbo;
 	unsigned int m_Ibo;
 
-	//FBX models
-	//unsigned int m_shader;
+	// FBX models
+	// Unsigned int m_shader;
 	FBXFile *m_myFbxModel;
 	std::vector<FBXFile*> m_FBXList;
+	//animations
+	float m_AnimationTimer = 0;
+	static const int max_anims = 100;
+	FBXFile *m_GhoulAnims[max_anims];
+	std::vector<FBXFile**> m_AnimationList;
+	
+	bool m_renderwireframe = false;
+	bool m_renderbones = false;
 
-	//Emitters;
+	int numfiles = 0;
+
+	int m_currentanimation = 0;
+
+	// Emitters;
 	ParticleEmitter *m_Emitter;
-	//vertex
+	std::vector<ParticleEmitter*>m_EmitterList;
+
+	float lifetimemin = 1, lifetimemax = 1;
+	float velocitymin = 1, velocitymax = 1;
+	float startsize =1, endsize = 1;
+	int maxparticles = 500;
+	int	emitrate = 1000;
+	glm::vec4 startcolor = glm::vec4(1, 0, 0, 1), endcolor = glm::vec4(1, 1, 0, 1);
+
+	// Vertex
 	struct Vertex
 	{
 		glm::vec4 pos;

@@ -1,12 +1,13 @@
-
+#define GLM_SWIZZLE
 #include "CameraProjection.h"
 #include <Input.h>
 
 #include <glm\glm.hpp>
 #include <glm\ext.hpp>
 
-Camera::Camera()
+Camera::Camera(aie::Application* a_app)
 {
+	app = a_app;
 }
 
 Camera::~Camera()
@@ -17,28 +18,25 @@ void Camera::Update(float deltaTime)
 {
 	aie::Input *input = aie::Input::getInstance();	// Get a pointer to the input manager
 
-	float Speeeeeeeeed = m_moveSpeed;
+	float SpeeeeEEEEEEEeeEEEEeeeeed = m_moveSpeed;
 	
 	if (input->isKeyDown(aie::INPUT_KEY_RIGHT_SHIFT) || input->isKeyDown(aie::INPUT_KEY_LEFT_SHIFT))
-		Speeeeeeeeed = m_modSpeed;
+		SpeeeeEEEEEEEeeEEEEeeeeed = m_modSpeed;
 
 	// Move camera using keys
 	if (input->isKeyDown(aie::INPUT_KEY_W))
-		m_position += Speeeeeeeeed * deltaTime * m_cameraLook;
+		m_position += SpeeeeEEEEEEEeeEEEEeeeeed * deltaTime * m_cameraLook;
 
 	if (input->isKeyDown(aie::INPUT_KEY_S))
-		m_position -= Speeeeeeeeed * deltaTime * m_cameraLook;
-
+		m_position -= SpeeeeEEEEEEEeeEEEEeeeeed * deltaTime * m_cameraLook;
 
 	glm::vec3 strafevec = glm::normalize(glm::cross(m_cameraLook, m_cameraUp));
 
 	if (input->isKeyDown(aie::INPUT_KEY_A))
-		m_position -= Speeeeeeeeed * deltaTime * strafevec;
+		m_position -= SpeeeeEEEEEEEeeEEEEeeeeed * deltaTime * strafevec;
 
 	if (input->isKeyDown(aie::INPUT_KEY_D))
-		m_position += Speeeeeeeeed * deltaTime * strafevec;
-
-
+		m_position += SpeeeeEEEEEEEeeEEEEeeeeed * deltaTime * strafevec;
 
 	// Rotate the camera base don mouse movement
 	//aie::Input *input = aie::Input::getInstance();	// Get a pointer to the input manager
@@ -69,6 +67,8 @@ void Camera::Update(float deltaTime)
 
 	// Calculate the new cameraLook vector
 	CalculateLook();
+
+	CalculateProjection();
 }
 
 void Camera::LookAt(glm::vec3 target)
@@ -92,14 +92,51 @@ const glm::vec3 &Camera::GetPosition()
 	return m_position;
 }
 
-//const glm::vec3 Camera::GetPosition()
-//{
-//	return glm::vec3;
-//}
-
 const glm::mat4 & Camera::GetView()
 {
 	return m_viewMatrix;
+}
+
+const glm::mat4 & Camera::GetProjection()
+{
+	return projectionMatrix;
+	// TODO: insert return statement here
+}
+
+bool Camera::IsVisible(glm::vec3 a_Position, glm::vec3 a_furthestPosition)
+{
+	//we're using centre position of an object as well as another position which
+	//is on a theoretical sphere that surrounds the object
+
+	//Step One - Transform centre and surface positions into screen space.
+	glm::mat4 projView = projectionMatrix * m_viewMatrix;
+	a_Position = (projView * glm::vec4(a_Position,1)).xyz;
+	a_furthestPosition = (projView * glm::vec4(a_furthestPosition, 1)).xyz;
+	
+
+	//Step Two - Now that our sphere is in screen space, we can test it against the frustum cube
+	glm::vec3 radial = a_Position - a_furthestPosition;
+	float radius = radial.length();
+	//Now test the centre and add/remove the radius and see if its ever within
+	//-1 to 1 (so would be drawn)
+	////if (a_Position.x <= 1 && a_Position.x >= -1
+	////	&& a_Position.y <= 1 && a_Position.y >= -1
+	////	&& a_Position.z <= 1 && a_Position.z >= -1)
+	////{
+	////	// The centre is inside the viewable area.
+	////	return true;
+	////}
+	
+	for (int i = 0; i < 3; i++)
+	{
+		if (abs(a_Position[i]) + radius >= 1) //if we're definitely outside 
+		{
+			return false;
+		}
+	}
+
+	// We want to return whether this sphere is touching or indside the camera's frustum
+	return false;
 }
 
 void Camera::CalculateLook()
@@ -126,4 +163,12 @@ void Camera::CalculateLook()
 void Camera::CalculateView()
 {
 	m_viewMatrix = glm::lookAt(m_position, m_position + m_cameraLook, m_cameraUp);
+}
+
+void Camera::CalculateProjection()
+{
+	projectionMatrix = glm::perspective(glm::pi<float>() * 0.25f,
+		app->getWindowWidth() / (float)app->getWindowHeight(),
+		0.1f, 1000.0f);
+	
 }

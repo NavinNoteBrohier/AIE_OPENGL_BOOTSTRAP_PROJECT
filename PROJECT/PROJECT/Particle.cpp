@@ -1,4 +1,9 @@
 #include "Particle.h"
+#include <glm/glm.hpp>
+#include <glm/ext.hpp>
+#include <gl_core_4_4.h>
+
+
 
 ParticleEmitter::ParticleEmitter()
 
@@ -24,7 +29,9 @@ ParticleEmitter::~ParticleEmitter()
 
 }
 
-void ParticleEmitter::Initialise(unsigned int a_EmitRate, unsigned int	a_MaxParticles, float a_LifeTimeMin, float a_LifetimeMax, float a_VelocityMin, float a_Velocitymax, float a_StartSize, float a_EndSize, const vec4 & a_StartColor, const vec4 & a_EndColor)
+void ParticleEmitter::Initialise(unsigned int a_EmitRate, unsigned int	a_MaxParticles, 
+	float a_LifeTimeMin, float a_LifetimeMax, float a_VelocityMin, float a_Velocitymax, 
+	float a_StartSize, float a_EndSize, const vec4 & a_StartColor, const vec4 & a_EndColor)
 {
 	// Setup Emit Timers
 	m_EmitTimer = 0;
@@ -61,7 +68,7 @@ void ParticleEmitter::Initialise(unsigned int a_EmitRate, unsigned int	a_MaxPart
 	// fill it now as it never changes
 
 	unsigned int* indexData = new unsigned int[m_MaxParticles * 6];
-	for (unsigned int i = 0; i < m_MaxParticles; i++)
+	for (unsigned int i = 0; i < m_MaxParticles; ++i)
 	{
 		indexData[i * 6 + 0] = i * 4 + 0;
 		indexData[i * 6 + 1] = i * 4 + 1;
@@ -117,14 +124,14 @@ void ParticleEmitter::Emit()
 		return;
 
 	// resurrect the first dead particle
-	Particle& particle = m_Particles[m_FirstDead++];
+   	Particle& particle = m_Particles[m_FirstDead++];
 
 	// Assign its starting position
 	particle.Position = m_Postion;
 
 	// Randomise its lifespan
 	particle.LifeTime = 0;
-	particle.LifeSpan = (rand() / (float)RAND_MAX) * (m_LifeSpanMax - m_LifeSpanMax) + m_LifeSpanMin;
+	particle.LifeSpan = (rand() / (float)RAND_MAX) * (m_LifeSpanMax - m_LifeSpanMin) + m_LifeSpanMin;
 
 	// Set its starting size and color;
 	particle.Color = m_StartColor;
@@ -203,7 +210,7 @@ void ParticleEmitter::Update(float a_DeltaTime, Camera a_camera)
 			//Create billboard transform.
 			vec3 zAxis = glm::normalize(a_camera.GetPosition() - particle->Position);
 			vec3 xAxis = glm::cross(vec3(a_camera.GetView()[1]), zAxis);
-			vec3 yAxis = glm::cross(zAxis, zAxis);
+			vec3 yAxis = glm::cross(zAxis, xAxis);
 			glm::mat4 BillBoard
 			(
 				vec4(xAxis, 0),
@@ -233,6 +240,30 @@ void ParticleEmitter::Update(float a_DeltaTime, Camera a_camera)
 		}
 	}
 
+}
+
+void ParticleEmitter::SetVariables(int EmitRate, int MaxParticles,
+	float LifeTimeMin, float LifetimeMax, float VelocityMin,
+	float VelocityMax, float StartSize, float EndSize, 
+	glm::vec4 StartColor, glm::vec4 EndColor)
+{
+	m_EmitRate = 1.0f / EmitRate;
+
+	// Store all Variables passed in
+
+	m_StartColor = StartColor;
+	m_EndColor = EndColor;
+
+	m_StartSize = StartSize;
+	m_EndSize = EndSize;
+
+	m_VelocityMin = VelocityMin;
+	m_VelocityMax = VelocityMax;
+
+	m_LifeSpanMin = LifeTimeMin;
+	m_LifeSpanMax = LifetimeMax;
+
+	m_MaxParticles = MaxParticles;
 }
 
 void ParticleEmitter::Draw()

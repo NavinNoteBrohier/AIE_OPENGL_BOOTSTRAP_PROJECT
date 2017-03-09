@@ -39,6 +39,9 @@ public:
 	void Emit();
 
 	void Update(float a_DeltaTime, Camera a_camera);
+	void SetVariables(int EmitRate, int MaxParticles, float LifeTimeMin,
+		float LifetimeMax, float VelocityMin, float VelocityMax, float StartSize,
+		float EndSize, glm::vec4 StartColor, glm::vec4 EndColor);
 
 	void Draw();
 

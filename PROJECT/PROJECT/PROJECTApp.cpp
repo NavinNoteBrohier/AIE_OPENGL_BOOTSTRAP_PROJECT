@@ -1,10 +1,33 @@
 #include "PROJECTApp.h"
 #include "Particle.h"
+#include "FBXAnimation.h"
 
 using glm::vec3;
 using glm::vec4;
 using glm::mat4;
 using aie::Gizmos;
+
+static std::string ghoul_animation_filenames[] =
+{
+	"./models/micro_ghoul/animations/mic_ghoul_attack.fbx",
+	"./models/micro_ghoul/animations/mic_ghoul_block.fbx",
+	"./models/micro_ghoul/animations/mic_ghoul_die.fbx",
+	"./models/micro_ghoul/animations/mic_ghoul_gethit_front.fbx",
+	"./models/micro_ghoul/animations/mic_ghoul_gethit_left.fbx",
+	"./models/micro_ghoul/animations/mic_ghoul_gethit_right.fbx",
+	"./models/micro_ghoul/animations/mic_ghoul_idle.fbx",
+	"./models/micro_ghoul/animations/mic_ghoul_laugh.fbx",
+	"./models/micro_ghoul/animations/mic_ghoul_multi_attack.fbx",
+	"./models/micro_ghoul/animations/mic_ghoul_panic.fbx",
+	"./models/micro_ghoul/animations/mic_ghoul_roar.fbx",
+	"./models/micro_ghoul/animations/mic_ghoul_search.fbx",
+	"./models/micro_ghoul/animations/mic_ghoul_spawn.fbx",
+	"./models/micro_ghoul/animations/mic_ghoul_talk.fbx",
+	"./models/micro_ghoul/animations/mic_ghoul_walk.fbx",
+	"./models/micro_ghoul/animations/mic_ghoul_walk_end.fbx",
+	"./models/micro_ghoul/animations/mic_ghoul_walk_Start.fbx",
+	"./models/micro_ghoul/animations/micro_ghoul_allinone.fbx",
+};
 
 PROJECTApp::PROJECTApp() {
 
@@ -15,11 +38,11 @@ PROJECTApp::~PROJECTApp() {
 }
 
 bool PROJECTApp::startup() {
-	
+
 	setBackgroundColour(0.0f, 0.2f, 0.5f);
 
 	//Camera
-	m_Camera = new Camera();
+	m_Camera = new Camera(this);
 	m_Camera->SetPosition(vec3(10.0f, 10.0f, 10.0f));
 	m_Camera->LookAt(vec3(0.0f));
 
@@ -34,7 +57,7 @@ bool PROJECTApp::startup() {
 	m_LightPosition = glm::vec3(3.0f, 15.0f, 0.0f);
 	m_LightColor = glm::vec3(0.5f, 0.5f, 0.5f);
 	m_LightAmbientStrength = 0.25f;
-	m_SpecStrength = 0.5f;
+	m_SpecStrength = 0.7f;
 	m_LightSpecColor = glm::vec3(0.5f, 0.5f, 0.5f);
 
 	//Load texture and heightmap
@@ -49,24 +72,24 @@ bool PROJECTApp::startup() {
 
 	//Load models
 
+	
+	LoadFBX("./models/micro_ghoul/models/micro_ghoul.fbx", true);
 
+	LoadFBX("./models/lowpoly_building/lowpolybuilding.fbx");
 
-	m_myFbxModel = new FBXFile();
-	m_myFbxModel->load("./models/Golden Oaks Library/Golden Oaks Library.Fbx", FBXFile::UNITS_CENTIMETER);
-	CreateFBXOpenGLBuffers(m_myFbxModel);
-
+	numfiles = sizeof(ghoul_animation_filenames) / sizeof(std::string);
+	for (int i = 0; i < numfiles; i++)
+	{
+		m_GhoulAnims[i] = new FBXFile();
+		m_GhoulAnims[i]->loadAnimationsOnly(ghoul_animation_filenames[i].c_str(), FBXFile::UNITS_CENTIMETER);
+	}
+	
+	
+	//LoadFBXAnimations(ghoul_animation_filenames);
+	
 	//Load emitters 
-
-	m_Emitter = new ParticleEmitter();
-	m_Emitter->Initialise
-	(
-		1000, 500,
-		0.1f, 5.0f,
-		1, 5,
-		1, 0.1f,
-		glm::vec4(1, 0, 0, 1), glm::vec4(1, 1, 0, 1)
-	);
-	 //
+	LoadEmitter(100, 5000, 0.1f, 1.0f, 1, 5, 0.2f, 0.02f, glm::vec4(1, 0, 0, 1), glm::vec4(1, 1, 0, 1));
+	//
 
 	LoadShader();
 	CreateLandScape();
@@ -81,6 +104,15 @@ void PROJECTApp::shutdown()
 {
 	UnloadTex();
 	UnloadMap();
+	UnloadFBX();
+
+	for (int i = 0; i < numfiles; i++)
+	{
+		CleanupFBXOpenGLBuffers(m_GhoulAnims[i]);
+		m_GhoulAnims[i]->unload();
+		delete m_GhoulAnims[i];
+	}
+
 	CleanupFBXOpenGLBuffers(m_myFbxModel);
 	m_myFbxModel->unload();
 	delete m_myFbxModel;
@@ -89,19 +121,90 @@ void PROJECTApp::shutdown()
 
 void PROJECTApp::update(float deltaTime)
 {
-
-
 	// query time since application started
 	float time = getTime();
 
 	// rotate camera
 	m_Camera->Update(deltaTime);
 
-	m_Emitter->Update(deltaTime,*m_Camera);
-	
-	// wipe the gizmos clean for this frame
-	Gizmos::clear();
 
+	bool visible = m_Camera->IsVisible(vec3(1,1,1),vec3(1,2,1));
+	ImGui::Begin("frustum cull");
+	ImGui::Checkbox("Sphere is visible", &visible);
+	ImGui::End();
+
+
+	// Particles
+
+
+
+	ImGui::Begin("particles");
+
+	ImGui::SliderInt("Emit rate",&emitrate,0,5000);
+	ImGui::SliderInt("Max Particles", &maxparticles, 0, 1000);
+
+	ImGui::SliderFloat("Lifetime Min", &lifetimemin, 0, 100);
+	ImGui::SliderFloat("Lifetime Max", &lifetimemax, 0, 100);
+
+	ImGui::SliderFloat("Velocity Min", &velocitymin, 0, 1000);
+	ImGui::SliderFloat("Velocity Max", &velocitymax, 0, 1000);
+
+	ImGui::SliderFloat("Start Size", &startsize, 0, 10);
+	ImGui::SliderFloat("End Size", &endsize, 0, 10);
+
+	ImGui::ColorEdit4("Start Color", glm::value_ptr(startcolor));
+	ImGui::ColorEdit4("Start Color", glm::value_ptr(endcolor));
+
+	ImGui::End();
+
+	
+	for (int i = 0; i < m_EmitterList.size(); i++)
+	{
+
+		m_EmitterList.at(i)->SetVariables(emitrate,maxparticles,lifetimemin,lifetimemax,velocitymin,velocitymax,startsize,endsize,startcolor,endcolor);
+		m_EmitterList.at(i)->Update(deltaTime, *m_Camera);
+	}
+
+	//Animation
+	m_AnimationTimer += deltaTime;
+	UpdateFBXAnimation(m_FBXList.at(0),m_GhoulAnims[m_currentanimation]);
+
+
+
+
+	// Imgui
+	ImGui::Begin("Lights");
+	ImGui::SliderFloat("Light Position X", &m_LightPosition.x, -20, 20);
+	ImGui::SliderFloat("Light Position Y", &m_LightPosition.y, -20, 20);
+	ImGui::SliderFloat("Light Position Z", &m_LightPosition.z, -20, 20);
+	ImGui::SliderFloat("LightSphere Size", &LightSphereSize, 0, 100);
+
+	ImGui::SliderFloat("Light Ambient Strength", 
+		&m_LightAmbientStrength, 0, 1);
+	ImGui::SliderFloat("Light Spec Strength", 
+		&m_SpecStrength, 0, 100);
+
+	ImGui::ColorEdit4("Ambient Light Color", glm::value_ptr(m_LightColor));
+	ImGui::ColorEdit4("Specular Light Color", glm::value_ptr(m_LightSpecColor));
+
+	ImGui::End();
+	// Anim iMGUI
+
+	ImGui::Begin("Animations");
+	ImGui::Checkbox("Render Wireframe", &m_renderwireframe);
+	ImGui::Checkbox("Render bones", &m_renderbones);
+	for (int i = 0; i < numfiles; i++)
+	{
+		char buffer[64];
+
+		std::string name = ghoul_animation_filenames[i].substr(ghoul_animation_filenames[i].find_last_of('/') + 1);
+
+		sprintf(buffer, "%d %s", i, name.c_str());
+		if (ImGui::Button(buffer))m_currentanimation = i;
+	}
+	ImGui::End();
+	// wipe the gizmos clean for this frame
+	
 	// quit if we press escape
 	aie::Input* input = aie::Input::getInstance();
 
@@ -177,48 +280,21 @@ void PROJECTApp::draw()
 	// Step 6: de-activate the shader program, dont do future rendering with it any more.
 	glUseProgram(0);
 
-	Gizmos::draw(m_projectionMatrix * m_Camera->GetView());
+
 #pragma endregion
 
 #pragma region //FBX LOADING
-	// FBX loading
-	float s = 1.0f;
-	glm::mat4 model = glm::mat4
-	(
-		s, 0, 0, 0,
-		0, s, 0, 0,
-		0, 0, s, 0,
-		0, 0, 0, 1
-	);
 
-	glm::mat4 modelViewProjection = m_projectionMatrix * m_Camera->GetView() * model;
+	FBXLoop(m_ModelShader, *m_FBXList.at(1), 0.5f);
 
-	glUseProgram(m_ModelShader);
+#pragma endregion
 
-	//Send Uniform variables, in this case the "projection view matrix"
-	unsigned int mvpLoc = glGetUniformLocation(m_ModelShader, "ProjectionViewWorldMatrix");
-	glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, &modelViewProjection[0][0]);
+#pragma region //FBX ANIMATION
 
-	// Loop through each mesh within the fbx file.
-	for (unsigned int i = 0; i < m_myFbxModel->getMeshCount(); ++i)
-	{
-		FBXMeshNode *mesh = m_myFbxModel->getMeshByIndex(i);
-		GLMesh* glData = (GLMesh*)mesh->m_userData;
 
-		//get the texture from the model
-		unsigned int diffuseTexture = mesh->m_material->textureIDs[mesh->m_material->DiffuseTexture];
+	FBXLoop(m_AnimationShader, *m_FBXList.at(0), 0.05f, true);
 
-		//Bind the texture and send it to our shader
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, diffuseTexture);
-		glUniform1i(glGetUniformLocation(m_ModelShader, "diffuseTexture"), 0);
 
-		//Draw the Mesh
-		glBindVertexArray(glData->vao);
-		glDrawElements(GL_TRIANGLES, mesh->m_indices.size(), GL_UNSIGNED_INT, 0);
-		glBindVertexArray(0);
-	}
-	glUseProgram(0);
 #pragma endregion
 
 #pragma region //Emitters
@@ -227,12 +303,25 @@ void PROJECTApp::draw()
 	int loc = glGetUniformLocation(m_ParticleShader, "ProjectionView");
 	glUniformMatrix4fv(loc, 1, GL_FALSE,
 		glm::value_ptr(projectionView));
-	m_Emitter->Draw();
+
+
+	for (int i = 0; i < m_EmitterList.size(); i++)
+	{
+		
+		m_EmitterList.at(i)->Draw();
+	
+	}
 	glUseProgram(0);
 
 
 #pragma endregion
 
+
+	Gizmos::clear();
+	Gizmos::addSphere(vec3(1, 1, 1), 5, 5, 5, glm::vec4(1, 1, 0, 0.05f));
+	Gizmos::addSphere(vec3(m_LightPosition.x, m_LightPosition.y, m_LightPosition.z),
+		LightSphereSize, 10, 10, glm::vec4(1, 1, 1, 0.5));
+	Gizmos::draw(m_projectionMatrix * m_Camera->GetView());
 }
 
 void PROJECTApp::CreateFBXOpenGLBuffers(FBXFile * file)
@@ -295,6 +384,77 @@ void PROJECTApp::CreateFBXOpenGLBuffers(FBXFile * file)
 		//Attach our GLMesh Object to the m_userData pointer.
 		fbxMesh->m_userData = glData;
 
+	}
+}
+
+void PROJECTApp::CreateFBXOpenGLBuffers(FBXFile * file, bool additionalAtribs)
+{
+	// FBX Files contain multiple meshes, each with seperate material information
+	// loop through each mesh within the FBX file and cretae VAO, VBO and IBO buffers for each mesh.
+	// We can store that information within the mesh object via its "user data" void pointer variable.
+	for (unsigned int i = 0; i < file->getMeshCount(); i++)
+	{
+		//Get current mesh from file
+		FBXMeshNode *fbxMesh = file->getMeshByIndex(i);
+
+		GLMesh *glData = new GLMesh();
+
+		glGenVertexArrays(1, &glData->vao);
+		glBindVertexArray(glData->vao);
+
+		glGenBuffers(1, &glData->vbo);
+		glGenBuffers(1, &glData->ibo);
+
+		glBindBuffer(GL_ARRAY_BUFFER, glData->vbo);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, glData->ibo);
+
+		//Fill the vbo with our vertices.
+		// the FBXLoader has conveniently already defined a vertex structure for us.
+		glBufferData
+			(
+				GL_ARRAY_BUFFER,
+				fbxMesh->m_vertices.size() * sizeof(FBXVertex),
+				fbxMesh->m_vertices.data(), GL_STATIC_DRAW
+				);
+
+		// fill the ibo with the indices.
+		// fbx meshes can be large, so indices are stored as an unsigned int.
+		glBufferData
+			(
+				GL_ELEMENT_ARRAY_BUFFER,
+				fbxMesh->m_indices.size() * sizeof(unsigned int),
+				fbxMesh->m_indices.data(), GL_STATIC_DRAW
+				);
+
+		// Setup Vertex Attrib pointers
+		//Remember, we only need to setup the appropriate attributes for the shaders that will be rendering this fbx object
+		glEnableVertexAttribArray(0); // position
+		glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, sizeof(FBXVertex), (void*)FBXVertex::PositionOffset);
+
+		glEnableVertexAttribArray(1);//normal
+		glVertexAttribPointer(1, 4, GL_FLOAT, GL_TRUE, sizeof(FBXVertex), (void*)FBXVertex::NormalOffset);
+
+		glEnableVertexAttribArray(2);// tangents
+		glVertexAttribPointer(2, 4, GL_FLOAT, GL_TRUE, sizeof(FBXVertex), (void*)FBXVertex::TangentOffset);
+
+		glEnableVertexAttribArray(3);// texcoords
+		glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(FBXVertex), (void*)FBXVertex::TexCoord1Offset);
+
+		glEnableVertexAttribArray(4);// weights
+		glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(FBXVertex), (void*)FBXVertex::WeightsOffset);
+
+		glEnableVertexAttribArray(5);// indices
+		glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, sizeof(FBXVertex), (void*)FBXVertex::IndicesOffset);
+
+		// TODO: add any additional attribute pointers required for shader use. ??
+
+		// Unbind
+		glBindVertexArray(0);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+		//Attach our GLMesh Object to the m_userData pointer.
+		fbxMesh->m_userData = glData;
 	}
 }
 
@@ -377,8 +537,8 @@ void PROJECTApp::LoadShader()
 		vec4 tempOne;\n																			\
 		vec4 tempTwo;\n																			\
 		vec4 texColor;\n																		\
-		tempOne = mix(texture2D(grass,fUv),texture2D(rock,fUv),(fPos.y));\n						\
-		tempTwo = mix(texture2D(sand,fUv),texture2D(snow,fUv),(fPos.y));\n						\
+		tempOne = mix(texture2D(grass,fUv *4),texture2D(rock,fUv*4),(fPos.y));\n						\
+		tempTwo = mix(texture2D(sand,fUv*4),texture2D(snow,fUv*4),(fPos.y));\n						\
 		if(fPos.y >= 3.0f)																		\
 		{																						\
 		texColor = mix(tempOne,tempTwo,(fPos.y) / 3);\n											\
@@ -492,10 +652,101 @@ void PROJECTApp::LoadShader()
 	glDeleteShader(FragmentShader);
 #pragma endregion
 
+#pragma region // Animation Shader
+
+	const char* animationVertex =
+		"#version 410\n													\
+		in vec4 Aposition;\n											\
+		in vec4 Anormal;\n												\
+		in vec4 Atangent;\n												\
+		in vec2 Atexcoord;\n											\
+		in vec4 Aweights;\n												\
+		in vec4 Aindices;\n												\
+																		\
+		out vec4 vNormal;\n												\
+		out vec2 vuV;\n													\
+																		\
+		uniform mat4 AnimProjectionViewWorldMatrix;\n					\
+		uniform mat4 AnimModel;\n										\
+		// we need to give our bone array a limit\n						\
+		const int MAX_BONES = 200;\n									\
+		uniform mat4 bones[MAX_BONES];\n								\
+																		\
+		void main()\n													\
+		{\n																\
+		vNormal = Anormal;\n											\
+		vuV = Atexcoord;\n												\
+																		\
+		ivec4 index = ivec4(Aindices);\n								\
+																		\
+		vec4 P =														\
+			 bones[index.x] * Aposition * Aweights.x;\n					\
+		P += bones[index.y] * Aposition * Aweights.y;\n					\
+		P += bones[index.z] * Aposition * Aweights.z;\n					\
+		P += bones[index.w] * Aposition * Aweights.w;\n					\
+																		\
+		gl_Position = AnimProjectionViewWorldMatrix * AnimModel * P;\n	\
+																		\
+		};																\
+		";
+
+	const char* animationFragment =
+		"#version 410\n														\
+		in vec4 vNormal;\n													\
+		in vec2 vuV;\n														\
+		out vec4 FragColor;\n												\
+		uniform sampler2D diffuseTexture;\n									\
+																			\
+		void main()\n														\
+		{\n																	\
+			FragColor = texture2D(diffuseTexture, vuV) * vec4(1,1,1,1);\n	\
+		};\n																	\
+		";
+
+	GLuint AnimVertexShader = glCreateShader(GL_VERTEX_SHADER);
+	glShaderSource(AnimVertexShader, 1, &animationVertex, 0);
+	glCompileShader(AnimVertexShader);
+
+	GLuint AnimFragShader = glCreateShader(GL_FRAGMENT_SHADER);
+	glShaderSource(AnimFragShader, 1, &animationFragment, 0);
+	glCompileShader(AnimFragShader);
+
+	m_AnimationShader = glCreateProgram();
+
+	glAttachShader(m_AnimationShader, AnimVertexShader);
+	glAttachShader(m_AnimationShader, AnimFragShader);
+
+	glBindAttribLocation(m_AnimationShader, 0, "Aposition");
+	glBindAttribLocation(m_AnimationShader, 1, "Anormal");
+	glBindAttribLocation(m_AnimationShader, 2, "Atangent");
+	glBindAttribLocation(m_AnimationShader, 3, "Atexcoord");
+	glBindAttribLocation(m_AnimationShader, 4, "Aweights");
+	glBindAttribLocation(m_AnimationShader, 5, "Aindices");
+
+	glLinkProgram(m_AnimationShader);
+
+	int success = GL_TRUE;
+	glGetProgramiv(m_AnimationShader, GL_LINK_STATUS, &success);
+	if (success == GL_FALSE)
+	{
+		int infoLogLength = 0;
+		glGetProgramiv(m_AnimationShader, GL_INFO_LOG_LENGTH, &infoLogLength);
+
+		char* error = new char[infoLogLength + 1];
+		glGetProgramInfoLog(m_AnimationShader, infoLogLength, 0, error);
+		printf("Shader error: \n%s\n", error);
+		delete[] error;
+	}
+
+	glDeleteShader(AnimVertexShader);
+	glDeleteShader(AnimFragShader);
+
+#pragma endregion
+
 #pragma region //Particle Shader
 
 	const char* ParticleVertexShader =
-		"#version 410\n								\
+		"#version 410\n									\
 		in vec4 Position;\n								\
 		in vec4 inColor;\n								\
 														\
@@ -503,10 +754,10 @@ void PROJECTApp::LoadShader()
 														\
 		uniform mat4 ProjectionView;\n					\
 														\
-		void main()\n										\
+		void main()\n									\
 		{\n												\
 			Color = inColor;\n							\
-			gl_Position = ProjectionView * Position;\n		\
+			gl_Position = ProjectionView * Position;\n	\
 														\
 		};\n											";
 
@@ -518,11 +769,6 @@ void PROJECTApp::LoadShader()
 														\
 		void main()\n									\
 		{\n												\
-														\
-														\
-														\
-														\
-														\
 			FragColor = Color;\n						\
 		};\n											";
 
@@ -532,6 +778,7 @@ void PROJECTApp::LoadShader()
 
 	GLuint PaFragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
 	glShaderSource(PaFragmentShader, 1, &ParticleFragmentShader, 0);
+	glCompileShader(PaFragmentShader);
 
 	m_ParticleShader = glCreateProgram();
 
@@ -542,6 +789,19 @@ void PROJECTApp::LoadShader()
 	glBindAttribLocation(m_ParticleShader, 1, "inColor");
 
 	glLinkProgram(m_ParticleShader);
+
+	int successs = GL_TRUE;
+	glGetProgramiv(m_ParticleShader, GL_LINK_STATUS, &successs);
+	if (successs == GL_FALSE)
+	{
+		int infoLogLength = 0;
+		glGetProgramiv(m_ParticleShader, GL_INFO_LOG_LENGTH, &infoLogLength);
+
+		char* error = new char[infoLogLength + 1];
+		glGetProgramInfoLog(m_ParticleShader, infoLogLength, 0, error);
+		printf("Shader error: \n%s\n", error);
+		delete[] error;
+	}
 
 	glDeleteShader(PaVertexShader);
 	glDeleteShader(PaFragmentShader);
@@ -555,6 +815,7 @@ void PROJECTApp::UnloadShader()
 	glDeleteProgram(m_shader);
 	glDeleteProgram(m_ModelShader);
 	glDeleteProgram(m_ParticleShader);
+	glDeleteProgram(m_AnimationShader);
 }
 
 void PROJECTApp::CreateLandScape()
@@ -767,7 +1028,16 @@ void PROJECTApp::LoadFBX(char* Location)
 	TempFBX = new FBXFile();
 	TempFBX->load(Location, FBXFile::UNITS_CENTIMETER);
 	m_FBXList.push_back(TempFBX);
-	CreateFBXOpenGLBuffers(m_FBXList.at(m_FBXList.size()));
+	CreateFBXOpenGLBuffers(m_FBXList.at(m_FBXList.size()-1));
+}
+
+void PROJECTApp::LoadFBX(char * Location, bool anim)
+{
+	FBXFile* TempFBX;
+	TempFBX = new FBXFile();
+	TempFBX->load(Location, FBXFile::UNITS_CENTIMETER);
+	m_FBXList.push_back(TempFBX);
+	CreateFBXOpenGLBuffers(m_FBXList.at(m_FBXList.size() - 1),true);
 }
 
 void PROJECTApp::UnloadTex()
@@ -784,5 +1054,182 @@ void PROJECTApp::UnloadMap()
 
 void PROJECTApp::UnloadFBX()
 {
+	for (int i = 0; i < m_FBXList.size(); i++)
+	{
+		CleanupFBXOpenGLBuffers(m_FBXList.at(i));
+		m_FBXList.at(i)->unload();
+		delete m_FBXList.at(i);
+	}
 	m_FBXList.clear();
+}
+
+void PROJECTApp::FBXLoop(unsigned int a_Shader, FBXFile& a_Model, float a_scale)
+{
+	glm::mat4 model = glm::mat4
+	(
+		a_scale, 0, 0, 0,
+		0, a_scale, 0, 0,
+		0, 0, a_scale, 0,
+		0, 0, 0, 1
+	);
+
+	glm::mat4 modelViewProjection = m_projectionMatrix * m_Camera->GetView() * model;
+
+	glUseProgram(a_Shader);
+
+	//Send Uniform variables, in this case the "projection view matrix"
+	unsigned int mvpLoc = glGetUniformLocation(a_Shader, "ProjectionViewWorldMatrix");
+	glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, &modelViewProjection[0][0]);
+
+	// Loop through each mesh within the fbx file.
+	for (unsigned int i = 0; i < a_Model.getMeshCount(); ++i)
+	{
+		FBXMeshNode *mesh = a_Model.getMeshByIndex(i);
+		GLMesh* glData = (GLMesh*)mesh->m_userData;
+
+		//get the texture from the model
+		unsigned int diffuseTexture = mesh->m_material->textureIDs[mesh->m_material->DiffuseTexture];
+
+		//Bind the texture and send it to our shader
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, diffuseTexture);
+		glUniform1i(glGetUniformLocation(a_Shader, "diffuseTexture"), 0);
+
+		//Draw the Mesh
+		glBindVertexArray(glData->vao);
+		glDrawElements(GL_TRIANGLES, mesh->m_indices.size(), GL_UNSIGNED_INT, 0);
+		glBindVertexArray(0);
+	}
+	glUseProgram(0);
+}
+
+void PROJECTApp::FBXLoop(unsigned int a_Shader, FBXFile & a_Model, float a_scale, bool a_Skeleton)
+{
+	glm::mat4 model = glm::mat4
+		(
+			a_scale, 0, 0, 0,
+			0, a_scale, 0, 0,
+			0, 0, a_scale, 0,
+			0, 0, 0, 1
+			);
+
+	glm::mat4 modelViewProjection = m_projectionMatrix * m_Camera->GetView();
+
+	if (m_renderwireframe)
+	{
+		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	}
+	else
+	{
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	}
+
+	glUseProgram(a_Shader);
+
+	//Send Uniform variables, in this case the "projection view matrix"
+	glUniformMatrix4fv(glGetUniformLocation(a_Shader, "AnimProjectionViewWorldMatrix"), 1, GL_FALSE, &modelViewProjection[0][0]);
+	glUniformMatrix4fv(glGetUniformLocation(a_Shader, "AnimModel"), 1, GL_FALSE, &model[0][0]);
+
+	//Grab the skeleton and animation we want to use.
+	FBXSkeleton* skeleton = a_Model.getSkeletonByIndex(0);
+	skeleton->updateBones();
+	
+	int bones_location = glGetUniformLocation(a_Shader, "bones");
+	glUniformMatrix4fv(bones_location, skeleton->m_boneCount, GL_FALSE, (float*)skeleton->m_bones);
+
+	if (m_renderbones)
+	{
+		for (int i = 0; i < skeleton->m_boneCount; i++)
+		{
+			glm::vec3 scale;
+			glm::quat rotation;
+			glm::vec3 translation;
+			glm::vec3 skew;
+			glm::vec4 perspective;
+
+			glm::decompose(skeleton->m_nodes[i]->m_globalTransform * model, scale, rotation, translation, skew, perspective);
+
+			Gizmos::addAABBFilled(translation * a_scale, scale, glm::vec4(1, 0, 0, 0.5f));
+		}
+	}
+
+	// Loop through each mesh within the fbx file.
+	for (unsigned int i = 0; i < a_Model.getMeshCount(); ++i)
+	{
+		FBXMeshNode *mesh = a_Model.getMeshByIndex(i);
+		GLMesh* glData = (GLMesh*)mesh->m_userData;
+
+		//get the texture from the model
+		unsigned int TdiffuseTexture = mesh->m_material->textureIDs[mesh->m_material->DiffuseTexture];
+
+		//Bind the texture and send it to our shader
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, TdiffuseTexture);
+		glUniform1i(glGetUniformLocation(a_Shader, "diffuseTexture"), 0);
+
+		//Draw the Mesh
+		glBindVertexArray(glData->vao);
+		glDrawElements(GL_TRIANGLES, mesh->m_indices.size(), GL_UNSIGNED_INT, 0);
+		glBindVertexArray(0);
+	}
+	glUseProgram(0);
+	Gizmos::draw(m_projectionMatrix * m_Camera->GetView());
+}
+
+void PROJECTApp::LoadFBXAnimations(static std::string a_String[])
+{
+	static const int Max_anims = 100;
+	FBXFile* TempFBX[Max_anims];
+	int numfiles = sizeof(a_String) / sizeof(std::string);
+
+	for (int i = 0; i < numfiles; i++)
+	{
+		TempFBX[i] = new FBXFile();
+		TempFBX[i]->loadAnimationsOnly(a_String[i].c_str(), FBXFile::UNITS_CENTIMETER);
+	}
+
+	m_AnimationList.push_back(TempFBX);
+}
+
+void PROJECTApp::UpdateFBXAnimation(FBXFile* a_model, FBXFile* a_anims)
+{
+
+	// Spooky scary Skeletons
+	// Grab the skeleton and animation we want to use
+	FBXSkeleton* skeleton = a_model->getSkeletonByIndex(0);
+	FBXAnimation* animation = a_anims->getAnimationByIndex(0);
+
+	skeleton->evaluate(animation, m_AnimationTimer);
+
+	// Evaluate the animation to update bones
+	for (unsigned int bone_index = 0; bone_index < skeleton->m_boneCount;
+		bone_index++)
+	{
+		skeleton->m_nodes[bone_index]->updateGlobalTransform();
+	}
+
+}
+
+void PROJECTApp::LoadEmitter(int EmitRate, int MaxParticles, float LifeTimeMin, float LifetimeMax,
+	float VelocityMin, float VelocityMax, float StartSize, float EndSize, glm::vec4 StartColor, 
+	glm::vec4 EndColor)
+{
+	ParticleEmitter* TempEmit;
+	TempEmit = new ParticleEmitter();
+	TempEmit->Initialise
+	(
+		EmitRate, MaxParticles,
+		LifeTimeMin, LifetimeMax,
+		VelocityMin, VelocityMax,
+		StartSize, EndSize,
+		StartColor, EndColor
+	);
+
+	m_EmitterList.push_back(TempEmit);
+
+}
+
+void PROJECTApp::UnloadEmitter()
+{
+	m_EmitterList.clear();
 }
