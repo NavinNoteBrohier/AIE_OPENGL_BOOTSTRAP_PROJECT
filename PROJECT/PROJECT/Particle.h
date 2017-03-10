@@ -43,10 +43,10 @@ public:
 		float LifetimeMax, float VelocityMin, float VelocityMax, float StartSize,
 		float EndSize, glm::vec4 StartColor, glm::vec4 EndColor);
 
-	void setImage(char* a_tex);
+	void setImage(int a_index);
 
 	void Draw();
-
+	int m_TexActive = NULL;
 protected:
 	Particle*		m_Particles;
 	unsigned int	m_FirstDead;
@@ -70,7 +70,7 @@ protected:
 	float			m_EndSize;
 
 	aie::Texture* m_texture;
-	bool m_TexActive = false;
+
 
 	vec4			m_StartColor;
 	vec4			m_EndColor;

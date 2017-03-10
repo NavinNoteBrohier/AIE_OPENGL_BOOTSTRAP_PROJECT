@@ -3,7 +3,7 @@
 int main() {
 	
 	auto app = new PROJECTApp();
-	app->run("AIE", 1280, 720, false);
+	app->run("AIE", app->GetWindowWidth(), app->GetWindowHeight(), false);
 	delete app;
 
 	return 0;

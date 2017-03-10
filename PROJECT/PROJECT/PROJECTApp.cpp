@@ -28,11 +28,13 @@ static std::string ghoul_animation_filenames[] =
 	"./models/micro_ghoul/animations/micro_ghoul_allinone.fbx",
 };
 
-PROJECTApp::PROJECTApp() {
+PROJECTApp::PROJECTApp() 
+{
 
 }
 
-PROJECTApp::~PROJECTApp() {
+PROJECTApp::~PROJECTApp() 
+{
 
 }
 
@@ -66,15 +68,15 @@ bool PROJECTApp::startup() {
 	LoadTex("textures/sand.png");
 	LoadTex("textures/snow.png");
 	LoadTex("textures/rock.png");
+	LoadTex("textures/bubble.png");
 	// Heightmap
 	LoadMap("textures/HM.bmp");
 
-	//Load models
 
-	
+	//Load models and animations
+	// boolean indicates bones for animation
 	LoadFBX("./models/micro_ghoul/models/micro_ghoul.fbx", true);
-
-	LoadFBX("./models/lowpoly_building/lowpolybuilding.fbx");
+	LoadFBX("./models/soulspear/soulspear.fbx");
 
 	numfiles = sizeof(ghoul_animation_filenames) / sizeof(std::string);
 	for (int i = 0; i < numfiles; i++)
@@ -88,9 +90,18 @@ bool PROJECTApp::startup() {
 	
 	//Load emitters 
 	LoadEmitter(100, 5000, 0.1f, 1.0f, 1, 5, 0.2f, 0.02f, glm::vec4(1, 0, 0, 1), glm::vec4(1, 1, 0, 1));
+	LoadEmitter(100, 5000, 0.1f, 1.0f, 1, 5, 0.2f, 0.02f, glm::vec4(0, 1, 1, 1), glm::vec4(0, 0, 0, 1));
+	m_EmitterList.at(1)->setImage(5);
+	
 	//
 
+	//Post Processing down there |
+							//   V
+
+
 	LoadShader();
+	SetupFrameBuffer();
+	SetupQuad();
 	CreateLandScape();
 
 	glEnable(GL_BLEND);
@@ -134,9 +145,6 @@ void PROJECTApp::update(float deltaTime)
 
 
 	// Particles
-
-
-
 	ImGui::Begin("particles");
 
 	ImGui::SliderInt("Emit rate",&emitrate,0,5000);
@@ -152,12 +160,12 @@ void PROJECTApp::update(float deltaTime)
 	ImGui::SliderFloat("End Size", &endsize, 0, 10);
 
 	ImGui::ColorEdit4("Start Color", glm::value_ptr(startcolor));
-	ImGui::ColorEdit4("Start Color", glm::value_ptr(endcolor));
+	ImGui::ColorEdit4("End Color", glm::value_ptr(endcolor));
 
 	ImGui::End();
 
 	
-	for (int i = 0; i < m_EmitterList.size(); i++)
+	for (unsigned int i = 0; i < m_EmitterList.size(); i++)
 	{
 
 		m_EmitterList.at(i)->SetVariables(emitrate,maxparticles,lifetimemin,lifetimemax,velocitymin,velocitymax,startsize,endsize,startcolor,endcolor);
@@ -183,8 +191,8 @@ void PROJECTApp::update(float deltaTime)
 	ImGui::SliderFloat("Light Spec Strength", 
 		&m_SpecStrength, 0, 100);
 
-	ImGui::ColorEdit4("Ambient Light Color", glm::value_ptr(m_LightColor));
-	ImGui::ColorEdit4("Specular Light Color", glm::value_ptr(m_LightSpecColor));
+	ImGui::ColorEdit3("Ambient Light Color", glm::value_ptr(m_LightColor));
+	ImGui::ColorEdit3("Specular Light Color", glm::value_ptr(m_LightSpecColor));
 
 	ImGui::End();
 	// Anim iMGUI
@@ -198,7 +206,7 @@ void PROJECTApp::update(float deltaTime)
 
 		std::string name = ghoul_animation_filenames[i].substr(ghoul_animation_filenames[i].find_last_of('/') + 1);
 
-		sprintf(buffer, "%d %s", i, name.c_str());
+		sprintf_s(buffer, "%d %s", i, name.c_str());
 		if (ImGui::Button(buffer))m_currentanimation = i;
 	}
 	ImGui::End();
@@ -216,10 +224,17 @@ void PROJECTApp::draw()
 	// wipe the screen to the background colour
 	clearScreen();
 
+	// Bind our target
+	glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
+	glViewport(0, 0, this->getWindowWidth(), this->getWindowHeight());
+	// Clear the target
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
 	// update perspective in case window resized
 	m_projectionMatrix = glm::perspective(glm::pi<float>() * 0.25f,
 		getWindowWidth() / (float)getWindowHeight(),
 		0.1f, 1000.f);
+
 
 #pragma region //Shader
 	// STEP 1: enable the shader program for rendering
@@ -299,29 +314,75 @@ void PROJECTApp::draw()
 #pragma region //Emitters
 
 	glUseProgram(m_ParticleShader);
-	SetupTex("PTex",0,m_ParticleShaderImage);
 	int loc = glGetUniformLocation(m_ParticleShader, "ProjectionView");
 	glUniformMatrix4fv(loc, 1, GL_FALSE,
 		glm::value_ptr(projectionView));
 
-
-	for (int i = 0; i < m_EmitterList.size(); i++)
+	for (unsigned int i = 0; i < m_EmitterList.size(); i++)
 	{
-		
-		m_EmitterList.at(i)->Draw();
-	
+		if (m_EmitterList.at(i)->m_TexActive == NULL)
+		{
+			m_EmitterList.at(i)->Draw();
+		}
 	}
 	glUseProgram(0);
 
+	glUseProgram(m_ParticleShaderImage);
+	SetupTex("PTex", 5, m_ParticleShaderImage);
+	glUniformMatrix4fv(glGetUniformLocation(m_ParticleShaderImage, "ProjectionView"),1,GL_FALSE,
+		glm::value_ptr(projectionView));
+
+
+	for (unsigned int i = 0; i < m_EmitterList.size(); i++)
+	{
+		if (m_EmitterList.at(i)->m_TexActive != NULL)
+		{
+			m_EmitterList.at(i)->Draw();
+		}
+	}
+	glUseProgram(0);
 
 #pragma endregion
 
-
+#pragma region //Gizmos
 	Gizmos::clear();
 	Gizmos::addSphere(vec3(1, 1, 1), 5, 5, 5, glm::vec4(1, 1, 0, 0.05f));
 	Gizmos::addSphere(vec3(m_LightPosition.x, m_LightPosition.y, m_LightPosition.z),
 		LightSphereSize, 10, 10, glm::vec4(1, 1, 1, 0.5));
 	Gizmos::draw(m_projectionMatrix * m_Camera->GetView());
+#pragma endregion
+	
+#pragma region //Post Processing
+	// Bind the back buffer
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, this->getWindowWidth(), this->getWindowHeight());
+
+	//just clear the back-buffer depth as each pixel will be filled.
+	glClear(GL_DEPTH_BUFFER_BIT);
+
+	//Draw our fullscreen quad
+	glUseProgram(m_PostProcessingShader);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, m_fboTexture);
+
+	glUniform1i(glGetUniformLocation(m_PostProcessingShader, "target"), 0);
+
+	glBindVertexArray(m_vao);
+	glDrawArrays(GL_TRIANGLES, 0, 6);
+
+	glUseProgram(0);
+#pragma endregion
+}
+
+const int PROJECTApp::GetWindowWidth()
+{
+	return WindowWidth;
+}
+
+const int PROJECTApp::GetWindowHeight()
+{
+	return WindowHeight;
 }
 
 void PROJECTApp::SetupFrameBuffer()
@@ -331,9 +392,51 @@ void PROJECTApp::SetupFrameBuffer()
 
 	glGenTextures(1, &m_fboTexture);
 	glBindTexture(GL_TEXTURE_2D, m_fboTexture);
-	glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, this->getWindowWidth, this->getWindowHeight);
-	//glTexParameteri()
+	glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, this->getWindowWidth(), this->getWindowHeight());
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, m_fboTexture, 0);
+	glGenRenderbuffers(1, &m_fboDepth);
+	glBindRenderbuffer(GL_RENDERBUFFER, m_fboDepth);
+	glRenderbufferStorage(GL_RENDERBUFFER,GL_DEPTH_COMPONENT24,this->getWindowWidth(),this->getWindowHeight());
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, m_fboDepth);
 
+	GLenum drawBuffers[] = { GL_COLOR_ATTACHMENT0 };
+	glDrawBuffers(1, drawBuffers);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void PROJECTApp::SetupQuad()
+{
+	glm::vec2 texelSize = 1.0f / glm::vec2(WindowWidth, WindowHeight);
+	glm::vec2 HalfTexelSize = 1.0f / glm::vec2(WindowWidth, WindowHeight) * 0.5f;
+
+	float m_vertexData[] =
+	{
+		-1,-1, 0, 1,     HalfTexelSize.x,     HalfTexelSize.y,
+		1, 1, 0, 1, 1 - HalfTexelSize.x, 1 - HalfTexelSize.y,
+		-1, 1, 0, 1,     HalfTexelSize.x, 1 - HalfTexelSize.y,
+
+		-1,-1, 0, 1,     HalfTexelSize.x,     HalfTexelSize.y,
+		1,-1, 0, 1, 1 - HalfTexelSize.x,     HalfTexelSize.y,
+		1, 1, 0, 1, 1 - HalfTexelSize.x, 1 - HalfTexelSize.y
+	};
+
+	glGenVertexArrays(1, &m_vao);
+	glBindVertexArray(m_vao);
+
+	glGenBuffers(1, &m_vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 6 * 6, m_vertexData, GL_STATIC_DRAW);
+	
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, sizeof(float) * 6,0);
+
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 6, ((char*)0) + 16);
+
+	glBindVertexArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 void PROJECTApp::CreateFBXOpenGLBuffers(FBXFile * file)
@@ -851,18 +954,15 @@ void PROJECTApp::LoadShader()
 		"#version 410\n									\
 														\
 		in vec4 Color;\n								\
-		out	vec4 FragColor;\n							\
-		out vec4 TfNormal;\n							\
-		out vec2 TfUv;\n								\
 														\
-														\
-														\
-														\
+		in vec4 TfNormal;\n								\
+		in vec2 TfUv;\n									\
+				out	vec4 FragColor;\n					\
 		uniform sampler2D PTex;\n						\
-														\
+											\
 		void main()\n									\
 		{\n												\
-			FragColor = Color * TfUv;\n					\
+			FragColor = (Color * vec4(TfUv,0,0));\n					\
 		};\n											";
 
 	GLuint TPaVertexShader = glCreateShader(GL_VERTEX_SHADER);
@@ -873,27 +973,27 @@ void PROJECTApp::LoadShader()
 	glShaderSource(TPaFragmentShader, 1, &ParticleFragmentShaderImage, 0);
 	glCompileShader(TPaFragmentShader);
 
-	m_ParticleShader = glCreateProgram();
+	m_ParticleShaderImage = glCreateProgram();
 
 	glAttachShader(m_ParticleShaderImage, TPaVertexShader);
 	glAttachShader(m_ParticleShaderImage, TPaFragmentShader);
 
-	glBindAttribLocation(m_ParticleShader, 0, "Position");
-	glBindAttribLocation(m_ParticleShader, 1, "inColor");
-	glBindAttribLocation(m_ParticleShader, 3, "TvUv");
-	glBindAttribLocation(m_ParticleShader, 4, "TvNormal");
+	glBindAttribLocation(m_ParticleShaderImage, 0, "Position");
+	glBindAttribLocation(m_ParticleShaderImage, 1, "inColor");
+	glBindAttribLocation(m_ParticleShaderImage, 3, "TvUv");
+	glBindAttribLocation(m_ParticleShaderImage, 4, "TvNormal");
 
-	glLinkProgram(m_ParticleShader);
+	glLinkProgram(m_ParticleShaderImage);
 
-	int successs = GL_TRUE;
-	glGetProgramiv(m_ParticleShader, GL_LINK_STATUS, &successs);
+	successs = GL_TRUE;
+	glGetProgramiv(m_ParticleShaderImage, GL_LINK_STATUS, &successs);
 	if (successs == GL_FALSE)
 	{
 		int infoLogLength = 0;
-		glGetProgramiv(m_ParticleShader, GL_INFO_LOG_LENGTH, &infoLogLength);
+		glGetProgramiv(m_ParticleShaderImage, GL_INFO_LOG_LENGTH, &infoLogLength);
 
 		char* error = new char[infoLogLength + 1];
-		glGetProgramInfoLog(m_ParticleShader, infoLogLength, 0, error);
+		glGetProgramInfoLog(m_ParticleShaderImage, infoLogLength, 0, error);
 		printf("Shader error: \n%s\n", error);
 		delete[] error;
 	}
@@ -901,6 +1001,94 @@ void PROJECTApp::LoadShader()
 	glDeleteShader(TPaVertexShader);
 	glDeleteShader(TPaFragmentShader);
 
+#pragma endregion
+
+#pragma region //PostProcessing Shader
+	const char* PPVertShader =
+		"#version 410\n\
+in vec4 position;\n\
+in vec2 texCoord;\n\
+out vec2 fTexCoord;\n\
+void main()\n\
+{\n\
+\n\
+gl_Position = position;\n\
+fTexCoord = texCoord;\n\
+}";
+
+	const char* PPFragShader =
+		"#version 410\n\
+in vec2 fTexCoord;\n\
+out vec4 fragColor;\n\
+uniform sampler2D target;\n\
+vec4 Simple()\n\
+{\
+return texture(target, fTexCoord);\n\
+};\
+\
+vec4 BoxBlur()\
+{\
+vec2 texel = 1.0f / textureSize(target,0).xy;\n\
+\
+vec4 color = texture(target,fTexCoord);\
+color += texture(target, fTexCoord + vec2(-texel.x, texel.y));\
+color += texture(target, fTexCoord + vec2(-texel.x, 0));\
+color += texture(target, fTexCoord + vec2(-texel.x, -texel.y));\
+color += texture(target, fTexCoord + vec2(0, texel.y));\
+color += texture(target, fTexCoord + vec2(0, -texel.y));\
+color += texture(target, fTexCoord + vec2(texel.x, texel.y));\
+color += texture(target, fTexCoord + vec2(texel.x, 0));\
+color += texture(target, fTexCoord + vec2(texel.x, -texel.y));\
+return color / 9;\n\
+};\
+vec4 Distort()\
+{\
+vec2 mid = vec2(0.5f);\
+float distanceFromCentre = distance(fTexCoord,mid);\
+vec2 normalizedCoord = normalize(fTexCoord - mid);\
+float bias = distanceFromCentre + sin(distanceFromCentre * 15) * 0.02f;\
+vec2 newCoord = mid + bias * normalizedCoord;\
+return texture(target,newCoord);\
+}\
+void main()\n\
+{\
+fragColor = Distort();\n\
+}\
+";
+
+	GLuint PPVertexShader = glCreateShader(GL_VERTEX_SHADER);
+	glShaderSource(PPVertexShader, 1, &PPVertShader, 0);
+	glCompileShader(PPVertexShader);
+
+	GLuint PPFragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+	glShaderSource(PPFragmentShader, 1, &PPFragShader, 0);
+	glCompileShader(PPFragmentShader);
+
+	m_PostProcessingShader = glCreateProgram();
+
+	glAttachShader(m_PostProcessingShader, PPVertexShader);
+	glAttachShader(m_PostProcessingShader, PPFragmentShader);
+
+	glBindAttribLocation(m_PostProcessingShader, 0, "position");
+	glBindAttribLocation(m_PostProcessingShader, 1, "texCoord");
+
+	glLinkProgram(m_PostProcessingShader);
+
+	successs = GL_TRUE;
+	glGetProgramiv(m_PostProcessingShader, GL_LINK_STATUS, &successs);
+	if (successs == GL_FALSE)
+	{
+		int infoLogLength = 0;
+		glGetProgramiv(m_PostProcessingShader, GL_INFO_LOG_LENGTH, &infoLogLength);
+
+		char* error = new char[infoLogLength + 1];
+		glGetProgramInfoLog(m_PostProcessingShader, infoLogLength, 0, error);
+		printf("Shader error: \n%s\n", error);
+		delete[] error;
+	}
+
+	glDeleteShader(PPVertexShader);
+	glDeleteShader(PPFragmentShader);
 #pragma endregion
 
 }
@@ -912,6 +1100,7 @@ void PROJECTApp::UnloadShader()
 	glDeleteProgram(m_ParticleShader);
 	glDeleteProgram(m_ParticleShaderImage);
 	glDeleteProgram(m_AnimationShader);
+	glDeleteProgram(m_PostProcessingShader);
 }
 
 void PROJECTApp::CreateLandScape()
@@ -1150,7 +1339,7 @@ void PROJECTApp::UnloadMap()
 
 void PROJECTApp::UnloadFBX()
 {
-	for (int i = 0; i < m_FBXList.size(); i++)
+	for (unsigned int i = 0; i < m_FBXList.size(); i++)
 	{
 		CleanupFBXOpenGLBuffers(m_FBXList.at(i));
 		m_FBXList.at(i)->unload();
@@ -1235,7 +1424,7 @@ void PROJECTApp::FBXLoop(unsigned int a_Shader, FBXFile & a_Model, float a_scale
 
 	if (m_renderbones)
 	{
-		for (int i = 0; i < skeleton->m_boneCount; i++)
+		for (unsigned int i = 0; i < skeleton->m_boneCount; i++)
 		{
 			glm::vec3 scale;
 			glm::quat rotation;
@@ -1272,7 +1461,7 @@ void PROJECTApp::FBXLoop(unsigned int a_Shader, FBXFile & a_Model, float a_scale
 	Gizmos::draw(m_projectionMatrix * m_Camera->GetView());
 }
 
-void PROJECTApp::LoadFBXAnimations(static std::string a_String[])
+void PROJECTApp::LoadFBXAnimations( std::string a_String[])
 {
 	static const int Max_anims = 100;
 	FBXFile* TempFBX[Max_anims];

@@ -2,9 +2,6 @@
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
 #include <gl_core_4_4.h>
-
-
-
 ParticleEmitter::ParticleEmitter()
 
 	:m_Particles(nullptr),
@@ -266,11 +263,9 @@ void ParticleEmitter::SetVariables(int EmitRate, int MaxParticles,
 	m_MaxParticles = MaxParticles;
 }
 
-void ParticleEmitter::setImage(char* a_tex)
+void ParticleEmitter::setImage(int a_index)
 {
-	m_texture = new aie::Texture();
-	m_texture->load(a_tex);
-	m_TexActive = true;
+	m_TexActive = a_index;
 }
 
 void ParticleEmitter::Draw()
@@ -279,6 +274,7 @@ void ParticleEmitter::Draw()
 	// based on how many alive particles 
 	glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
 	glBufferSubData(GL_ARRAY_BUFFER, 0, m_FirstDead * 4 * sizeof(ParticleVertex), m_VertexData);
+
 
 	//Draw particles
 	glBindVertexArray(m_vao);

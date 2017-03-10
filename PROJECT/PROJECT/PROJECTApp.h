@@ -21,11 +21,6 @@
 //																			 //
 ///////////////////////////////////////////////////////////////////////////////
 
-
-// Now is not the time to run from the accusations that I am irredeemably broken.Resistance is saying that, not me.I am not broken.My code is broken.I am whole and I am doing the right thing.This is all part of the process.I have wrestled these demons before and I have won.I have looked defeat in the face and it is not a mirror, it is a mirage.I am going to make a game that some people will like to play.
-// My code is broken. And I am going to fix it.
-// Attributed to Shaid Kamal Ahmad: https://medium.com/@shahidkamal/my-code-is-broken-and-so-am-i-923b0b1abf1b#.opajp7qro
-
 class Camera;
 class ParticleEmitter;
 
@@ -42,7 +37,6 @@ public:
 	unsigned int ibo;
 };
 
-
 class PROJECTApp : public aie::Application
 {
 public:
@@ -56,9 +50,14 @@ public:
 	virtual void update(float deltaTime);
 	virtual void draw();
 
-	//Post processing
+	//Globals
+	const int GetWindowWidth();
+	const int GetWindowHeight();
 
+	//Post processing
 	void SetupFrameBuffer();
+	void SetupQuad();
+
 
 	//FBX render
 	void CreateFBXOpenGLBuffers(FBXFile *file);
@@ -89,7 +88,7 @@ public:
 	void FBXLoop(unsigned int a_Shader, FBXFile& a_Model, float a_scale, bool a_Skeleton);
 
 	// Animations
-	void LoadFBXAnimations(static std::string a_String[]);
+	void LoadFBXAnimations( std::string a_String[]);
 	void UpdateFBXAnimation(FBXFile* a_model, FBXFile* a_anims);
 
 	//Particles
@@ -99,6 +98,10 @@ public:
 	void UnloadEmitter();
 
 protected:
+	// Constants 
+	int WindowWidth = 1280;
+	int WindowHeight = 720;
+
 	// Camera transforms
 	Camera *m_Camera;
 	glm::mat4	m_viewMatrix;
@@ -119,7 +122,7 @@ protected:
 	glm::vec3 m_LightColor;
 	glm::vec3 m_LightSpecColor;
 
-	float LightSphereSize = 0.5;
+	float LightSphereSize = 0.25;
 
 	float m_LightAmbientStrength;
 	float m_SpecStrength;
@@ -130,6 +133,7 @@ protected:
 	unsigned int m_AnimationShader;
 	unsigned int m_ParticleShader;
 	unsigned int m_ParticleShaderImage;
+	unsigned int m_PostProcessingShader;
 
 	unsigned int m_IndicesCount;
 	unsigned int m_VertCount;
@@ -140,7 +144,12 @@ protected:
 
 	//Post processing
 	GLuint m_fbo;
-	GLuint m_fboTexture;
+	unsigned int m_fboTexture;
+	GLuint m_fboDepth;
+	GLuint m_vao;
+	GLuint m_vbo;
+
+
 
 	// FBX models
 	// Unsigned int m_shader;
@@ -180,4 +189,39 @@ protected:
 		static void SetupVertexAttribPointers();
 	};
 
+};
+
+
+class AABB 
+{
+public:
+	AABB() { reset(); };
+	virtual ~AABB() {};
+
+	void reset()
+	{
+		min.x = min.y = min.z = 1e37f;
+		max.x = max.y = max.z = -1e37f;
+	}
+
+	void fit(const std::vector<glm::vec3>& points)
+	{
+		for (auto& p : points)
+		{
+			if (p.x < min.x) min.x = p.x;
+			if (p.y < min.y) min.y = p.y;
+			if (p.z < min.z) min.z = p.z;
+			if (p.x > max.x) max.x = p.x;
+			if (p.y > max.y) max.y = p.y;
+			if (p.z > max.z) max.z = p.z;
+		}
+
+		centre = (min + max) * 0.5f;
+		radius = glm::distance(min, centre);
+
+	}
+
+	glm::vec3 min, max;
+	glm::vec3 centre;
+	float radius;
 };
