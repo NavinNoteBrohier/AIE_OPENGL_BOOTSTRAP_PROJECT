@@ -83,6 +83,7 @@ bool PROJECTApp::startup() {
 	{
 		m_GhoulAnims[i] = new FBXFile();
 		m_GhoulAnims[i]->loadAnimationsOnly(ghoul_animation_filenames[i].c_str(), FBXFile::UNITS_CENTIMETER);
+	
 	}
 	
 	
@@ -116,16 +117,13 @@ void PROJECTApp::shutdown()
 	UnloadMap();
 	UnloadFBX();
 
-	for (int i = 0; i < numfiles; i++)
+	for (int i = 0; i < numfiles - 1; i++)
 	{
 		CleanupFBXOpenGLBuffers(m_GhoulAnims[i]);
 		m_GhoulAnims[i]->unload();
 		delete m_GhoulAnims[i];
 	}
 
-	CleanupFBXOpenGLBuffers(m_myFbxModel);
-	m_myFbxModel->unload();
-	delete m_myFbxModel;
 	Gizmos::destroy();
 }
 
@@ -138,7 +136,7 @@ void PROJECTApp::update(float deltaTime)
 	m_Camera->Update(deltaTime);
 
 
-	bool visible = m_Camera->IsVisible(vec3(1,1,1),vec3(1,2,1));
+	
 	ImGui::Begin("frustum cull");
 	ImGui::Checkbox("Sphere is visible", &visible);
 	ImGui::End();
@@ -221,6 +219,9 @@ void PROJECTApp::update(float deltaTime)
 
 void PROJECTApp::draw()
 {
+
+
+#pragma region //Init
 	// wipe the screen to the background colour
 	clearScreen();
 
@@ -234,9 +235,10 @@ void PROJECTApp::draw()
 	m_projectionMatrix = glm::perspective(glm::pi<float>() * 0.25f,
 		getWindowWidth() / (float)getWindowHeight(),
 		0.1f, 1000.f);
-
+#pragma endregion
 
 #pragma region //Shader
+
 	// STEP 1: enable the shader program for rendering
 	glUseProgram(m_shader);
 
@@ -329,7 +331,7 @@ void PROJECTApp::draw()
 
 	glUseProgram(m_ParticleShaderImage);
 	SetupTex("PTex", 5, m_ParticleShaderImage);
-	glUniformMatrix4fv(glGetUniformLocation(m_ParticleShaderImage, "ProjectionView"),1,GL_FALSE,
+	glUniformMatrix4fv(glGetUniformLocation(m_ParticleShaderImage, "ProjectionView"), 1, GL_FALSE,
 		glm::value_ptr(projectionView));
 
 
@@ -344,9 +346,45 @@ void PROJECTApp::draw()
 
 #pragma endregion
 
-#pragma region //Gizmos
+#pragma region //Frustum Culling
 	Gizmos::clear();
-	Gizmos::addSphere(vec3(1, 1, 1), 5, 5, 5, glm::vec4(1, 1, 0, 0.05f));
+	BoundingSphere sphere;
+	sphere.centre = vec3(0, 0, 0);
+	sphere.radius = 0.5f;
+	vec4 planes[6];
+	GetFrustumPlanes((m_Camera->GetProjection() * m_Camera->GetView()), planes);
+
+	Gizmos::addSphere(sphere.centre, sphere.radius, 8, 8, vec4(1, 0, 1, 1));
+
+	visible = false;
+
+	for (int i = 0; i < 6; i++)
+	{
+		float d = glm::dot(vec3(planes[i]), sphere.centre) + planes[i].w;
+
+		if (d < -sphere.radius)
+		{
+		
+			visible = false;
+			break;
+		}
+		else if (d < sphere.radius)
+		{
+			//visible = true;
+	
+		}
+		else
+		{
+			visible = true;
+
+		}
+	}
+
+
+#pragma endregion
+
+#pragma region //Gizmos
+
 	Gizmos::addSphere(vec3(m_LightPosition.x, m_LightPosition.y, m_LightPosition.z),
 		LightSphereSize, 10, 10, glm::vec4(1, 1, 1, 0.5));
 	Gizmos::draw(m_projectionMatrix * m_Camera->GetView());
@@ -373,6 +411,8 @@ void PROJECTApp::draw()
 
 	glUseProgram(0);
 #pragma endregion
+
+	
 }
 
 const int PROJECTApp::GetWindowWidth()
@@ -589,10 +629,62 @@ void PROJECTApp::CleanupFBXOpenGLBuffers(FBXFile * file)
 	}
 }
 
+void PROJECTApp::GetFrustumPlanes(const glm::mat4 & transform, glm::vec4 * planes)
+{
+	// Right side
+	planes[0] = vec4(
+		transform[0][3] - transform[0][0],
+		transform[1][3] - transform[1][0],
+		transform[2][3] - transform[2][0],
+		transform[3][3] - transform[3][0]
+	);
+	// Left side
+	planes[1] = vec4(
+		transform[0][3] + transform[0][0],
+		transform[1][3] + transform[1][0],
+		transform[2][3] + transform[2][0],
+		transform[3][3] + transform[3][0]
+	);
+	// Top
+	planes[2] = vec4(
+		transform[0][3] - transform[0][1],
+		transform[1][3] - transform[1][1],
+		transform[2][3] - transform[2][1],
+		transform[3][3] - transform[3][1]
+	);
+	// Bottom
+	planes[3] = vec4(
+		transform[0][3] + transform[0][1],
+		transform[1][3] + transform[1][1],
+		transform[2][3] + transform[2][1],
+		transform[3][3] + transform[3][1]
+	);
+	// Far
+	planes[4] = vec4(
+		transform[0][3] - transform[0][2],
+		transform[1][3] - transform[1][2],
+		transform[2][3] - transform[2][2],
+		transform[3][3] - transform[3][2]
+	);
+	// Near
+	planes[5] = vec4(
+		transform[0][3] + transform[0][2],
+		transform[1][3] + transform[1][2],
+		transform[2][3] + transform[2][2],
+		transform[3][3] + transform[3][2]
+	);
+
+	for (int i = 0; i < 6; i++)
+	{
+		float d = glm::length(vec3(planes[i]));
+		planes[i] /= d;
+	}
+}
+
 void PROJECTApp::LoadShader()
 {
 #pragma region //m_shader
-	std::cout << "Started Loadshader" << std::endl;
+
 
 	static const char* vertex_shader =
 		"#version 400\n									\
@@ -675,41 +767,41 @@ void PROJECTApp::LoadShader()
 
 
 	//uniform sampler2D texture;\n		
-	std::cout << "after shader" << std::endl;
+
 
 	// Step 1:
 	// Load the vertex shader, provide it with the source code and compile it.
 	GLuint vs = glCreateShader(GL_VERTEX_SHADER);
 	glShaderSource(vs, 1, &vertex_shader, NULL);
 	glCompileShader(vs);
-	std::cout << "Finished Step 1" << std::endl;
+	
 	// Step 2:
 	// Load the fragment shader, provide it with the source code and compile it.
 	GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
 	glShaderSource(fs, 1, &fragment_shader, NULL);
 	glCompileShader(fs);
-	std::cout << "Finished Step 2" << std::endl;
+
 	// step 3:
 	// Create the shader program
 	m_shader = glCreateProgram();
-	std::cout << "Finished Step 3" << std::endl;
+
 	// Step 4:
 	// attach the vertex and fragment shaders to the m_shader program
 	glAttachShader(m_shader, vs);
 	glAttachShader(m_shader, fs);
-	std::cout << "Finished Step 4" << std::endl;
+
 	// Step 5:
 	// describe the location of the shader inputs the link the program
 	glBindAttribLocation(m_shader, 0, "vPosition");
 	glBindAttribLocation(m_shader, 1, "vUv");
 	glBindAttribLocation(m_shader, 2, "vNormal");
 	glLinkProgram(m_shader);
-	std::cout << "Finished Step 5" << std::endl;
+
 	// step 6:
 	// delete the vs and fs shaders
 	glDeleteShader(vs);
 	glDeleteShader(fs);
-	std::cout << "Finished Step 6" << std::endl;
+
 #pragma endregion
 
 #pragma region //Model Shader
@@ -849,7 +941,7 @@ void PROJECTApp::LoadShader()
 
 		char* error = new char[infoLogLength + 1];
 		glGetProgramInfoLog(m_AnimationShader, infoLogLength, 0, error);
-		printf("Shader error: \n%s\n", error);
+	
 		delete[] error;
 	}
 
@@ -914,7 +1006,7 @@ void PROJECTApp::LoadShader()
 
 		char* error = new char[infoLogLength + 1];
 		glGetProgramInfoLog(m_ParticleShader, infoLogLength, 0, error);
-		printf("Shader error: \n%s\n", error);
+
 		delete[] error;
 	}
 
@@ -994,7 +1086,7 @@ void PROJECTApp::LoadShader()
 
 		char* error = new char[infoLogLength + 1];
 		glGetProgramInfoLog(m_ParticleShaderImage, infoLogLength, 0, error);
-		printf("Shader error: \n%s\n", error);
+
 		delete[] error;
 	}
 
@@ -1083,7 +1175,7 @@ fragColor = Distort();\n\
 
 		char* error = new char[infoLogLength + 1];
 		glGetProgramInfoLog(m_PostProcessingShader, infoLogLength, 0, error);
-		printf("Shader error: \n%s\n", error);
+
 		delete[] error;
 	}
 
@@ -1139,7 +1231,7 @@ void PROJECTApp::CreateLandScape()
 
 	}
 
-	std::cout << verts.size() << std::endl;
+	
 
 	// calculate indices for verts
 	for (int z = 0; z < m_LandLength - 1; z++)

@@ -1,4 +1,5 @@
 #pragma once
+
 #include <glm/mat4x4.hpp>
 #include <iostream>
 #include <Texture.h>
@@ -16,7 +17,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 //																			 //
 ///																			///
-//// Navin Brohier - navinnotebrohier.github.io - navin.brohier@gmail.com  ////
+//// Navin Brohoof - navinnotebrohier.github.io - navin.brohier@gmail.com  ////
 ///																			///
 //																			 //
 ///////////////////////////////////////////////////////////////////////////////
@@ -63,6 +64,9 @@ public:
 	void CreateFBXOpenGLBuffers(FBXFile *file);
 	void CreateFBXOpenGLBuffers(FBXFile *file, bool additionalAtribs);
 	void CleanupFBXOpenGLBuffers(FBXFile *file);
+
+	// Frustum Culling
+	void GetFrustumPlanes(const glm::mat4& transform, glm::vec4* planes);
 
 	//shader
 	void LoadShader();
@@ -149,7 +153,8 @@ protected:
 	GLuint m_vao;
 	GLuint m_vbo;
 
-
+	// Frustum
+	bool visible;
 
 	// FBX models
 	// Unsigned int m_shader;
@@ -224,4 +229,34 @@ public:
 	glm::vec3 min, max;
 	glm::vec3 centre;
 	float radius;
+
+
+
+};
+
+class BoundingSphere
+{
+public:
+	BoundingSphere() : centre(0), radius(0) {};
+	~BoundingSphere() {};
+
+	void fit(const std::vector < glm::vec3>& points)
+	{
+		glm::vec3 min(1e37f), max(-1e37f);
+		for(auto&  p : points )
+		{
+			if (p.x < min.x) min.x = p.x;
+			if (p.y < min.y) min.y = p.y;
+			if (p.z < min.z) min.z = p.z;
+			if (p.x > max.x) max.x = p.x;
+			if (p.y > max.y) max.y = p.y;
+			if (p.z > max.z) max.z = p.z;
+		}
+		centre = (min + max) * 0.5f;
+		radius = glm::distance(min, centre);
+	}
+
+	glm::vec3 centre;
+	float radius;
+
 };
