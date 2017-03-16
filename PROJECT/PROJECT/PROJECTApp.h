@@ -14,6 +14,8 @@
 #include "gl_core_4_4.h"
 #include "CameraProjection.h"
 #include "FBXFile.h"
+#include "FBXUtility.h"
+#include "Shaders.h"
 ///////////////////////////////////////////////////////////////////////////////
 //																			 //
 ///																			///
@@ -30,13 +32,7 @@ namespace aie
 	class Texture;
 }
 
-class GLMesh
-{
-public:
-	unsigned int vao;
-	unsigned int vbo;
-	unsigned int ibo;
-};
+
 
 class PROJECTApp : public aie::Application
 {
@@ -50,20 +46,10 @@ public:
 
 	virtual void update(float deltaTime);
 	virtual void draw();
-
-	//Globals
-	const int GetWindowWidth();
-	const int GetWindowHeight();
-
+	
 	//Post processing
 	void SetupFrameBuffer();
 	void SetupQuad();
-
-
-	//FBX render
-	void CreateFBXOpenGLBuffers(FBXFile *file);
-	void CreateFBXOpenGLBuffers(FBXFile *file, bool additionalAtribs);
-	void CleanupFBXOpenGLBuffers(FBXFile *file);
 
 	// Frustum Culling
 	void GetFrustumPlanes(const glm::mat4& transform, glm::vec4* planes);
@@ -84,32 +70,21 @@ public:
 	void UnloadTex();
 	void UnloadMap();
 
-	//Load/Unload/Setup Models
-	void LoadFBX(char* Location);
-	void LoadFBX(char* Location, bool anim);
-	void UnloadFBX();
-	void FBXLoop(unsigned int a_Shader, FBXFile& a_Model, float a_scale);
-	void FBXLoop(unsigned int a_Shader, FBXFile& a_Model, float a_scale, bool a_Skeleton);
-
-	// Animations
-	void LoadFBXAnimations( std::string a_String[]);
-	void UpdateFBXAnimation(FBXFile* a_model, FBXFile* a_anims);
-
 	//Particles
 	void LoadEmitter(int EmitRate, int MaxParticles, float LifeTimeMin,
 		float LifetimeMax, float VelocityMin, float VelocityMax, float StartSize,
 		float EndSize, glm::vec4 StartColor, glm::vec4 EndColor);
 	void UnloadEmitter();
 
-protected:
-	// Constants 
-	int WindowWidth = 1280;
-	int WindowHeight = 720;
-
 	// Camera transforms
 	Camera *m_Camera;
 	glm::mat4	m_viewMatrix;
 	glm::mat4	m_projectionMatrix;
+
+protected:
+	// Constants 
+	int WindowWidth = 1280;
+	int WindowHeight = 720;
 
 	// Textures
 	std::vector<aie::Texture*> m_TexList;
@@ -153,25 +128,13 @@ protected:
 	GLuint m_vao;
 	GLuint m_vbo;
 
+	int PostEffectNum = 0;
+	bool PostOne = false;
+	bool PostTwo = true;
+	bool PostThree = false;
+
 	// Frustum
 	bool visible;
-
-	// FBX models
-	// Unsigned int m_shader;
-	FBXFile *m_myFbxModel;
-	std::vector<FBXFile*> m_FBXList;
-	//animations
-	float m_AnimationTimer = 0;
-	static const int max_anims = 100;
-	FBXFile *m_GhoulAnims[max_anims];
-	std::vector<FBXFile**> m_AnimationList;
-	
-	bool m_renderwireframe = false;
-	bool m_renderbones = false;
-
-	int numfiles = 0;
-
-	int m_currentanimation = 0;
 
 	// Emitters;
 	ParticleEmitter *m_Emitter;

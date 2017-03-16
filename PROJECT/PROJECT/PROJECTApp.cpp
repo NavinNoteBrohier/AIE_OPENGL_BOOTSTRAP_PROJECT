@@ -28,6 +28,8 @@ static std::string ghoul_animation_filenames[] =
 	"./models/micro_ghoul/animations/micro_ghoul_allinone.fbx",
 };
 
+FBXFILES FBXUtil;
+
 PROJECTApp::PROJECTApp() 
 {
 
@@ -41,6 +43,27 @@ PROJECTApp::~PROJECTApp()
 bool PROJECTApp::startup() {
 
 	setBackgroundColour(0.0f, 0.2f, 0.5f);
+
+
+	FBXUtil.numfiles = sizeof(ghoul_animation_filenames) / sizeof(std::string);
+	int InputNum;
+
+	std::cout << "Ghoul Anim Number" << std::endl;
+	std::cin >> InputNum;
+	
+	if(InputNum > FBXUtil.numfiles) 
+	{
+		InputNum = FBXUtil.numfiles;
+	}
+	if(InputNum < 0)
+	{
+		FBXUtil.numfiles = 1;
+	}
+	else
+	{
+		FBXUtil.numfiles = InputNum;
+	};
+		
 
 	//Camera
 	m_Camera = new Camera(this);
@@ -75,15 +98,14 @@ bool PROJECTApp::startup() {
 
 	//Load models and animations
 	// boolean indicates bones for animation
-	LoadFBX("./models/micro_ghoul/models/micro_ghoul.fbx", true);
-	LoadFBX("./models/soulspear/soulspear.fbx");
+	FBXUtil.LoadFBX("./models/micro_ghoul/models/micro_ghoul.fbx", true);
+	FBXUtil.LoadFBX("./models/soulspear/soulspear.fbx");
 
-	numfiles = sizeof(ghoul_animation_filenames) / sizeof(std::string);
-	for (int i = 0; i < numfiles; i++)
+
+	for (int i = 0; i < FBXUtil.numfiles; i++)
 	{
-		m_GhoulAnims[i] = new FBXFile();
-		m_GhoulAnims[i]->loadAnimationsOnly(ghoul_animation_filenames[i].c_str(), FBXFile::UNITS_CENTIMETER);
-	
+		FBXUtil.m_GhoulAnims[i] = new FBXFile();
+		FBXUtil.m_GhoulAnims[i]->loadAnimationsOnly(ghoul_animation_filenames[i].c_str(), FBXFile::UNITS_CENTIMETER);
 	}
 	
 	
@@ -115,13 +137,13 @@ void PROJECTApp::shutdown()
 {
 	UnloadTex();
 	UnloadMap();
-	UnloadFBX();
+	FBXUtil.UnloadFBX();
 
-	for (int i = 0; i < numfiles - 1; i++)
+	for (int i = 0; i < FBXUtil.numfiles - 1; i++)
 	{
-		CleanupFBXOpenGLBuffers(m_GhoulAnims[i]);
-		m_GhoulAnims[i]->unload();
-		delete m_GhoulAnims[i];
+		FBXUtil.CleanupFBXOpenGLBuffers(FBXUtil.m_GhoulAnims[i]);
+		FBXUtil.m_GhoulAnims[i]->unload();
+		delete FBXUtil.m_GhoulAnims[i];
 	}
 
 	Gizmos::destroy();
@@ -135,12 +157,9 @@ void PROJECTApp::update(float deltaTime)
 	// rotate camera
 	m_Camera->Update(deltaTime);
 
-
-	
 	ImGui::Begin("frustum cull");
 	ImGui::Checkbox("Sphere is visible", &visible);
 	ImGui::End();
-
 
 	// Particles
 	ImGui::Begin("particles");
@@ -162,7 +181,6 @@ void PROJECTApp::update(float deltaTime)
 
 	ImGui::End();
 
-	
 	for (unsigned int i = 0; i < m_EmitterList.size(); i++)
 	{
 
@@ -171,13 +189,10 @@ void PROJECTApp::update(float deltaTime)
 	}
 
 	//Animation
-	m_AnimationTimer += deltaTime;
-	UpdateFBXAnimation(m_FBXList.at(0),m_GhoulAnims[m_currentanimation]);
+	FBXUtil.m_AnimationTimer += deltaTime;
+	FBXUtil.UpdateFBXAnimation(FBXUtil.m_FBXList.at(0), FBXUtil.m_GhoulAnims[FBXUtil.m_currentanimation]);
 
-
-
-
-	// Imgui
+	//Light Imgui
 	ImGui::Begin("Lights");
 	ImGui::SliderFloat("Light Position X", &m_LightPosition.x, -20, 20);
 	ImGui::SliderFloat("Light Position Y", &m_LightPosition.y, -20, 20);
@@ -193,23 +208,31 @@ void PROJECTApp::update(float deltaTime)
 	ImGui::ColorEdit3("Specular Light Color", glm::value_ptr(m_LightSpecColor));
 
 	ImGui::End();
-	// Anim iMGUI
 
+	// Anim iMGUI
 	ImGui::Begin("Animations");
-	ImGui::Checkbox("Render Wireframe", &m_renderwireframe);
-	ImGui::Checkbox("Render bones", &m_renderbones);
-	for (int i = 0; i < numfiles; i++)
+	ImGui::Checkbox("Render Wireframe", &FBXUtil.m_renderwireframe);
+	ImGui::Checkbox("Render bones", &FBXUtil.m_renderbones);
+	for (int i = 0; i < FBXUtil.numfiles; i++)
 	{
 		char buffer[64];
 
 		std::string name = ghoul_animation_filenames[i].substr(ghoul_animation_filenames[i].find_last_of('/') + 1);
 
 		sprintf_s(buffer, "%d %s", i, name.c_str());
-		if (ImGui::Button(buffer))m_currentanimation = i;
+		if (ImGui::Button(buffer))FBXUtil.m_currentanimation = i;
 	}
 	ImGui::End();
-	// wipe the gizmos clean for this frame
 	
+	ImGui::Begin("Post Processing");
+	ImGui::Checkbox("Enable Default",&PostOne);
+	if (PostOne) { PostTwo = false; PostThree = false; }
+	ImGui::Checkbox("Enable Warp",	 &PostTwo);
+	if (PostTwo) { PostOne = false; PostThree = false; }
+	ImGui::Checkbox("Enable Blur",	 &PostThree);
+	if (PostThree) { PostTwo = false; PostOne = false; }
+	ImGui::End();
+
 	// quit if we press escape
 	aie::Input* input = aie::Input::getInstance();
 
@@ -219,7 +242,6 @@ void PROJECTApp::update(float deltaTime)
 
 void PROJECTApp::draw()
 {
-
 
 #pragma region //Init
 	// wipe the screen to the background colour
@@ -301,14 +323,14 @@ void PROJECTApp::draw()
 
 #pragma region //FBX LOADING
 
-	FBXLoop(m_ModelShader, *m_FBXList.at(1), 0.5f);
+	FBXUtil.FBXLoop(m_ModelShader, *FBXUtil.m_FBXList.at(1), 0.5f, m_projectionMatrix, m_Camera->GetView());
 
 #pragma endregion
 
 #pragma region //FBX ANIMATION
 
 
-	FBXLoop(m_AnimationShader, *m_FBXList.at(0), 0.05f, true);
+	FBXUtil.FBXLoop(m_AnimationShader, *FBXUtil.m_FBXList.at(0), 0.05f, true,m_projectionMatrix, m_Camera->GetView());
 
 
 #pragma endregion
@@ -333,7 +355,6 @@ void PROJECTApp::draw()
 	SetupTex("PTex", 5, m_ParticleShaderImage);
 	glUniformMatrix4fv(glGetUniformLocation(m_ParticleShaderImage, "ProjectionView"), 1, GL_FALSE,
 		glm::value_ptr(projectionView));
-
 
 	for (unsigned int i = 0; i < m_EmitterList.size(); i++)
 	{
@@ -364,19 +385,16 @@ void PROJECTApp::draw()
 
 		if (d < -sphere.radius)
 		{
-		
 			visible = false;
 			break;
 		}
 		else if (d < sphere.radius)
 		{
-			//visible = true;
-	
+
 		}
 		else
 		{
 			visible = true;
-
 		}
 	}
 
@@ -391,38 +409,35 @@ void PROJECTApp::draw()
 #pragma endregion
 	
 #pragma region //Post Processing
-	// Bind the back buffer
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glViewport(0, 0, this->getWindowWidth(), this->getWindowHeight());
+	//printf(" Post set\n");
 
-	//just clear the back-buffer depth as each pixel will be filled.
-	glClear(GL_DEPTH_BUFFER_BIT);
+	std::cout << PostEffectNum << std::endl;
+	PostEffectNum = PostOne ? 0 : PostTwo ? 1 : PostThree ? 2 : 0;
 
-	//Draw our fullscreen quad
-	glUseProgram(m_PostProcessingShader);
-
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, m_fboTexture);
-
-	glUniform1i(glGetUniformLocation(m_PostProcessingShader, "target"), 0);
-
-	glBindVertexArray(m_vao);
-	glDrawArrays(GL_TRIANGLES, 0, 6);
-
-	glUseProgram(0);
-#pragma endregion
-
+		// Bind the back buffer
 	
-}
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		glViewport(0, 0, this->getWindowWidth(), this->getWindowHeight());
 
-const int PROJECTApp::GetWindowWidth()
-{
-	return WindowWidth;
-}
+		//just clear the back-buffer depth as each pixel will be filled.
+		glClear(GL_DEPTH_BUFFER_BIT);
 
-const int PROJECTApp::GetWindowHeight()
-{
-	return WindowHeight;
+		//Draw our fullscreen quad
+		glUseProgram(m_PostProcessingShader);
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, m_fboTexture);
+
+		glUniform1i(glGetUniformLocation(m_PostProcessingShader, "target"), 0);
+		glUniform1iv(glGetUniformLocation(PostEffectNum, "PostEffectNum"),1, &PostEffectNum);
+
+		glBindVertexArray(m_vao);
+		glDrawArrays(GL_TRIANGLES, 0, 6);
+
+		glUseProgram(0);
+	
+#pragma endregion
+	
 }
 
 void PROJECTApp::SetupFrameBuffer()
@@ -477,156 +492,6 @@ void PROJECTApp::SetupQuad()
 
 	glBindVertexArray(0);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
-}
-
-void PROJECTApp::CreateFBXOpenGLBuffers(FBXFile * file)
-{
-	// FBX Files contain multiple meshes, each with seperate material information
-	// loop through each mesh within the FBX file and cretae VAO, VBO and IBO buffers for each mesh.
-	// We can store that information within the mesh object via its "user data" void pointer variable.
-	for (unsigned int i = 0; i < file->getMeshCount(); i++)
-	{
-		//Get current mesh from file
-		FBXMeshNode *fbxMesh = file->getMeshByIndex(i);
-
-		GLMesh *glData = new GLMesh();
-
-		glGenVertexArrays(1, &glData->vao);
-		glBindVertexArray(glData->vao);
-
-		glGenBuffers(1, &glData->vbo);
-		glGenBuffers(1, &glData->ibo);
-
-		glBindBuffer(GL_ARRAY_BUFFER, glData->vbo);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, glData->ibo);
-
-		//Fill the vbo with our vertices.
-		// the FBXLoader has conveniently already defined a vertex structure for us.
-		glBufferData
-		(
-			GL_ARRAY_BUFFER,
-			fbxMesh->m_vertices.size() * sizeof(FBXVertex),
-			fbxMesh->m_vertices.data(), GL_STATIC_DRAW
-		);
-
-		// fill the ibo with the indices.
-		// fbx meshes can be large, so indices are stored as an unsigned int.
-		glBufferData
-		(
-			GL_ELEMENT_ARRAY_BUFFER,
-			fbxMesh->m_indices.size() * sizeof(unsigned int),
-			fbxMesh->m_indices.data(), GL_STATIC_DRAW
-		);
-
-		// Setup Vertex Attrib pointers
-		//Remember, we only need to setup the appropriate attributes for the shaders that will be rendering this fbx object
-		glEnableVertexAttribArray(0); // position
-		glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, sizeof(FBXVertex), 0);
-
-		glEnableVertexAttribArray(1);//normal
-		glVertexAttribPointer(1, 4, GL_FLOAT, GL_TRUE, sizeof(FBXVertex), ((char*)0) + FBXVertex::NormalOffset);
-
-		glEnableVertexAttribArray(2);// uv
-		glVertexAttribPointer(2, 2, GL_FLOAT, GL_TRUE, sizeof(FBXVertex), ((char*)0) + FBXVertex::TexCoord1Offset);
-
-		// TODO: add any additional attribute pointers required for shader use. ??
-
-		// Unbind
-		glBindVertexArray(0);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
-		//Attach our GLMesh Object to the m_userData pointer.
-		fbxMesh->m_userData = glData;
-
-	}
-}
-
-void PROJECTApp::CreateFBXOpenGLBuffers(FBXFile * file, bool additionalAtribs)
-{
-	// FBX Files contain multiple meshes, each with seperate material information
-	// loop through each mesh within the FBX file and cretae VAO, VBO and IBO buffers for each mesh.
-	// We can store that information within the mesh object via its "user data" void pointer variable.
-	for (unsigned int i = 0; i < file->getMeshCount(); i++)
-	{
-		//Get current mesh from file
-		FBXMeshNode *fbxMesh = file->getMeshByIndex(i);
-
-		GLMesh *glData = new GLMesh();
-
-		glGenVertexArrays(1, &glData->vao);
-		glBindVertexArray(glData->vao);
-
-		glGenBuffers(1, &glData->vbo);
-		glGenBuffers(1, &glData->ibo);
-
-		glBindBuffer(GL_ARRAY_BUFFER, glData->vbo);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, glData->ibo);
-
-		//Fill the vbo with our vertices.
-		// the FBXLoader has conveniently already defined a vertex structure for us.
-		glBufferData
-			(
-				GL_ARRAY_BUFFER,
-				fbxMesh->m_vertices.size() * sizeof(FBXVertex),
-				fbxMesh->m_vertices.data(), GL_STATIC_DRAW
-				);
-
-		// fill the ibo with the indices.
-		// fbx meshes can be large, so indices are stored as an unsigned int.
-		glBufferData
-			(
-				GL_ELEMENT_ARRAY_BUFFER,
-				fbxMesh->m_indices.size() * sizeof(unsigned int),
-				fbxMesh->m_indices.data(), GL_STATIC_DRAW
-				);
-
-		// Setup Vertex Attrib pointers
-		//Remember, we only need to setup the appropriate attributes for the shaders that will be rendering this fbx object
-		glEnableVertexAttribArray(0); // position
-		glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, sizeof(FBXVertex), (void*)FBXVertex::PositionOffset);
-
-		glEnableVertexAttribArray(1);//normal
-		glVertexAttribPointer(1, 4, GL_FLOAT, GL_TRUE, sizeof(FBXVertex), (void*)FBXVertex::NormalOffset);
-
-		glEnableVertexAttribArray(2);// tangents
-		glVertexAttribPointer(2, 4, GL_FLOAT, GL_TRUE, sizeof(FBXVertex), (void*)FBXVertex::TangentOffset);
-
-		glEnableVertexAttribArray(3);// texcoords
-		glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(FBXVertex), (void*)FBXVertex::TexCoord1Offset);
-
-		glEnableVertexAttribArray(4);// weights
-		glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(FBXVertex), (void*)FBXVertex::WeightsOffset);
-
-		glEnableVertexAttribArray(5);// indices
-		glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, sizeof(FBXVertex), (void*)FBXVertex::IndicesOffset);
-
-		// TODO: add any additional attribute pointers required for shader use. ??
-
-		// Unbind
-		glBindVertexArray(0);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
-		//Attach our GLMesh Object to the m_userData pointer.
-		fbxMesh->m_userData = glData;
-	}
-}
-
-void PROJECTApp::CleanupFBXOpenGLBuffers(FBXFile * file)
-{
-	for (unsigned int i = 0; i < file->getMeshCount(); i++)
-	{
-		FBXMeshNode *fbxMesh = file->getMeshByIndex(i);
-		GLMesh *glData = (GLMesh *)fbxMesh->m_userData;
-
-		glDeleteVertexArrays(1, &glData->vao);
-		glDeleteBuffers(1, &glData->vbo);
-		glDeleteBuffers(1, &glData->ibo);
-
-		delete glData;
-
-	}
 }
 
 void PROJECTApp::GetFrustumPlanes(const glm::mat4 & transform, glm::vec4 * planes)
@@ -1113,6 +978,7 @@ fTexCoord = texCoord;\n\
 in vec2 fTexCoord;\n\
 out vec4 fragColor;\n\
 uniform sampler2D target;\n\
+uniform int PostEffectNum;\n\
 vec4 Simple()\n\
 {\
 return texture(target, fTexCoord);\n\
@@ -1144,7 +1010,7 @@ return texture(target,newCoord);\
 }\
 void main()\n\
 {\
-fragColor = Distort();\n\
+		fragColor = PostEffectNum == 1 ? Distort() : PostEffectNum == 2 ? BoxBlur() : Simple() ;\n\
 }\
 ";
 
@@ -1182,7 +1048,6 @@ fragColor = Distort();\n\
 	glDeleteShader(PPVertexShader);
 	glDeleteShader(PPFragmentShader);
 #pragma endregion
-
 }
 
 void PROJECTApp::UnloadShader()
@@ -1399,24 +1264,6 @@ void PROJECTApp::SetupTex(GLchar* a_handle, int a_index, unsigned int a_shader)
 	glUniform1i(glGetUniformLocation(a_shader, a_handle), a_index);
 }
 
-void PROJECTApp::LoadFBX(char* Location)
-{
-	FBXFile* TempFBX;
-	TempFBX = new FBXFile();
-	TempFBX->load(Location, FBXFile::UNITS_CENTIMETER);
-	m_FBXList.push_back(TempFBX);
-	CreateFBXOpenGLBuffers(m_FBXList.at(m_FBXList.size()-1));
-}
-
-void PROJECTApp::LoadFBX(char * Location, bool anim)
-{
-	FBXFile* TempFBX;
-	TempFBX = new FBXFile();
-	TempFBX->load(Location, FBXFile::UNITS_CENTIMETER);
-	m_FBXList.push_back(TempFBX);
-	CreateFBXOpenGLBuffers(m_FBXList.at(m_FBXList.size() - 1),true);
-}
-
 void PROJECTApp::UnloadTex()
 {
 	m_TexList.clear();
@@ -1427,164 +1274,6 @@ void PROJECTApp::UnloadMap()
 {
 	m_MapList.clear();
 	// DEStRoyED
-}
-
-void PROJECTApp::UnloadFBX()
-{
-	for (unsigned int i = 0; i < m_FBXList.size(); i++)
-	{
-		CleanupFBXOpenGLBuffers(m_FBXList.at(i));
-		m_FBXList.at(i)->unload();
-		delete m_FBXList.at(i);
-	}
-	m_FBXList.clear();
-}
-
-void PROJECTApp::FBXLoop(unsigned int a_Shader, FBXFile& a_Model, float a_scale)
-{
-	glm::mat4 model = glm::mat4
-	(
-		a_scale, 0, 0, 0,
-		0, a_scale, 0, 0,
-		0, 0, a_scale, 0,
-		0, 0, 0, 1
-	);
-
-	glm::mat4 modelViewProjection = m_projectionMatrix * m_Camera->GetView() * model;
-
-	glUseProgram(a_Shader);
-
-	//Send Uniform variables, in this case the "projection view matrix"
-	unsigned int mvpLoc = glGetUniformLocation(a_Shader, "ProjectionViewWorldMatrix");
-	glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, &modelViewProjection[0][0]);
-
-	// Loop through each mesh within the fbx file.
-	for (unsigned int i = 0; i < a_Model.getMeshCount(); ++i)
-	{
-		FBXMeshNode *mesh = a_Model.getMeshByIndex(i);
-		GLMesh* glData = (GLMesh*)mesh->m_userData;
-
-		//get the texture from the model
-		unsigned int diffuseTexture = mesh->m_material->textureIDs[mesh->m_material->DiffuseTexture];
-
-		//Bind the texture and send it to our shader
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, diffuseTexture);
-		glUniform1i(glGetUniformLocation(a_Shader, "diffuseTexture"), 0);
-
-		//Draw the Mesh
-		glBindVertexArray(glData->vao);
-		glDrawElements(GL_TRIANGLES, mesh->m_indices.size(), GL_UNSIGNED_INT, 0);
-		glBindVertexArray(0);
-	}
-	glUseProgram(0);
-}
-
-void PROJECTApp::FBXLoop(unsigned int a_Shader, FBXFile & a_Model, float a_scale, bool a_Skeleton)
-{
-	glm::mat4 model = glm::mat4
-		(
-			a_scale, 0, 0, 0,
-			0, a_scale, 0, 0,
-			0, 0, a_scale, 0,
-			0, 0, 0, 1
-			);
-
-	glm::mat4 modelViewProjection = m_projectionMatrix * m_Camera->GetView();
-
-	if (m_renderwireframe)
-	{
-		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-	}
-	else
-	{
-		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-	}
-
-	glUseProgram(a_Shader);
-
-	//Send Uniform variables, in this case the "projection view matrix"
-	glUniformMatrix4fv(glGetUniformLocation(a_Shader, "AnimProjectionViewWorldMatrix"), 1, GL_FALSE, &modelViewProjection[0][0]);
-	glUniformMatrix4fv(glGetUniformLocation(a_Shader, "AnimModel"), 1, GL_FALSE, &model[0][0]);
-
-	//Grab the skeleton and animation we want to use.
-	FBXSkeleton* skeleton = a_Model.getSkeletonByIndex(0);
-	skeleton->updateBones();
-	
-	int bones_location = glGetUniformLocation(a_Shader, "bones");
-	glUniformMatrix4fv(bones_location, skeleton->m_boneCount, GL_FALSE, (float*)skeleton->m_bones);
-
-	if (m_renderbones)
-	{
-		for (unsigned int i = 0; i < skeleton->m_boneCount; i++)
-		{
-			glm::vec3 scale;
-			glm::quat rotation;
-			glm::vec3 translation;
-			glm::vec3 skew;
-			glm::vec4 perspective;
-
-			glm::decompose(skeleton->m_nodes[i]->m_globalTransform * model, scale, rotation, translation, skew, perspective);
-
-			Gizmos::addAABBFilled(translation * a_scale, scale, glm::vec4(1, 0, 0, 0.5f));
-		}
-	}
-
-	// Loop through each mesh within the fbx file.
-	for (unsigned int i = 0; i < a_Model.getMeshCount(); ++i)
-	{
-		FBXMeshNode *mesh = a_Model.getMeshByIndex(i);
-		GLMesh* glData = (GLMesh*)mesh->m_userData;
-
-		//get the texture from the model
-		unsigned int TdiffuseTexture = mesh->m_material->textureIDs[mesh->m_material->DiffuseTexture];
-
-		//Bind the texture and send it to our shader
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, TdiffuseTexture);
-		glUniform1i(glGetUniformLocation(a_Shader, "diffuseTexture"), 0);
-
-		//Draw the Mesh
-		glBindVertexArray(glData->vao);
-		glDrawElements(GL_TRIANGLES, mesh->m_indices.size(), GL_UNSIGNED_INT, 0);
-		glBindVertexArray(0);
-	}
-	glUseProgram(0);
-	Gizmos::draw(m_projectionMatrix * m_Camera->GetView());
-}
-
-void PROJECTApp::LoadFBXAnimations( std::string a_String[])
-{
-	static const int Max_anims = 100;
-	FBXFile* TempFBX[Max_anims];
-	int numfiles = sizeof(a_String) / sizeof(std::string);
-
-	for (int i = 0; i < numfiles; i++)
-	{
-		TempFBX[i] = new FBXFile();
-		TempFBX[i]->loadAnimationsOnly(a_String[i].c_str(), FBXFile::UNITS_CENTIMETER);
-	}
-
-	m_AnimationList.push_back(TempFBX);
-}
-
-void PROJECTApp::UpdateFBXAnimation(FBXFile* a_model, FBXFile* a_anims)
-{
-
-	// Spooky scary Skeletons
-	// Grab the skeleton and animation we want to use
-	FBXSkeleton* skeleton = a_model->getSkeletonByIndex(0);
-	FBXAnimation* animation = a_anims->getAnimationByIndex(0);
-
-	skeleton->evaluate(animation, m_AnimationTimer);
-
-	// Evaluate the animation to update bones
-	for (unsigned int bone_index = 0; bone_index < skeleton->m_boneCount;
-		bone_index++)
-	{
-		skeleton->m_nodes[bone_index]->updateGlobalTransform();
-	}
-
 }
 
 void PROJECTApp::LoadEmitter(int EmitRate, int MaxParticles, float LifeTimeMin, float LifetimeMax,
